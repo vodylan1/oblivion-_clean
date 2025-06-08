@@ -2,7 +2,7 @@
 import pytest
 
 from core.risk_manager.manager import RiskManager
-from core.synergy_conductor.concepts import TradeSignal
+from agents import TradeSignal
 from core.kill_switch.service import KillSwitch
 
 
