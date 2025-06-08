@@ -12,7 +12,7 @@ import os
 from collections import deque
 from typing import Deque, Dict
 
-from core.synergy_conductor.concepts import TradeSignal
+from agents import TradeSignal
 
 
 def _env_float(key: str, default: float) -> float:
