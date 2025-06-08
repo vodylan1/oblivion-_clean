@@ -1,0 +1,11 @@
+{
+  "v1_ts": "2025‑06‑06",
+  "rules": [
+    {"cond": "is_dex_lp",           "score": -0.2},
+    {"cond": "age_days > 30",       "score": -0.1},
+    {"cond": "holds_bluechips",     "score": -0.1},
+    {"cond": "dev_wallet",          "score": +0.5},
+    {"cond": "new_sniper_wallet",   "score": +0.3},
+    {"cond": "mempool_sandwich",    "score": +0.4}
+  ]
+}
