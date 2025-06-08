@@ -1,0 +1,16 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+
+# --- Logs, data, misc ---
+logs/
+*.log
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- Secrets ---
+config/secrets.json

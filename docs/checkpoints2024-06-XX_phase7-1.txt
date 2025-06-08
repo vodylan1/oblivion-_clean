@@ -1,0 +1,1 @@
+2-3 sentences: “Repo compiles; SHORT stubs printing; no external dependencies yet.”	
