@@ -1,95 +1,65 @@
 """
 secure_wallet.py
-────────────────────────────────────────────────────────────────────────────
-• load_keypair()                 – returns a solders.Keypair
-• get_solana_client(network)     – honours overrides in config/secrets.json
-• wallet_and_client()            – convenience tuple for Anchor / Drift
-
-The helper is lightweight and has **zero** external dependencies beyond
-`solders`, `solana-py`, and `anchorpy`.
+Phase 10.1 – Loads wallet from secrets.json or .env
+Signs transactions using solana-py or raw base58 decode.
 """
+# when it loads secrets.json:
+# "secret_key": [144,99,30,135,132,205,131,74,183,242,53,150,21,255,156,130,132,195,205,138,72,144,224,8,106,224,236,229,130,79,66,163,92,85,56,116,68,170,83,53,180,84,160,202,182,49,134,206,219,217,144,62,199,81,142,151,51,154,226,129,210,174,81,103],
 
-from __future__ import annotations
+# Then we can sign and send from that Keypair
 
-import json
 import os
+import json
 from pathlib import Path
-from typing import Tuple
+from typing import Optional
 
-from anchorpy import Wallet
-from solders.keypair import Keypair
-from solana.rpc.api import Client
+from solana.publickey import PublicKey
+from solana.keypair import Keypair
+from solana.rpc.async_api import AsyncClient
+from solana.transaction import Transaction
 
-# ───────────────────────────────────────────────────────────────────────────
-# Load config/secrets.json once – swallow all errors, fall back to defaults
-# ───────────────────────────────────────────────────────────────────────────
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_CFG_PATH  = _REPO_ROOT / "config" / "secrets.json"
+# We'll store a single global wallet instance for convenience
+_G_KEYPAIR: Optional[Keypair] = None
 
-_CFG: dict[str, str] = {}
-try:
-    _CFG = json.loads(_CFG_PATH.read_text("utf-8"))
-except Exception:       # noqa: BLE001  (file missing or malformed)
-    _CFG = {}
+def load_keypair() -> Keypair:
+    global _G_KEYPAIR
+    if _G_KEYPAIR is not None:
+        return _G_KEYPAIR
 
-# Helper for pretty banner
-def _note(txt: str) -> None:
-    print(f"[SecureWallet] {txt}")
+    # read secrets.json
+    secret_path = Path("config/secrets.json")
+    if not secret_path.exists():
+        raise FileNotFoundError("No config/secrets.json for wallet!")
+    data = json.loads(secret_path.read_text())
+    if "secret_key" not in data:
+        raise ValueError("secrets.json missing 'secret_key' field")
 
+    # "secret_key" is either array of 64 ints or base58?
+    raw = data["secret_key"]
+    if isinstance(raw, str):
+        # base58 decode
+        from solana.keypair import Keypair
+        from solana.rpc import types
+        from base58 import b58decode
+        raw_bytes = b58decode(raw)
+        _G_KEYPAIR = Keypair.from_secret_key(raw_bytes)
+    elif isinstance(raw, list):
+        # assume list[int]
+        _G_KEYPAIR = Keypair.from_secret_key(bytes(raw))
+    else:
+        raise ValueError("secret_key format not recognized")
 
-# ------------------------------------------------------------------------- #
-def _default_keyfile() -> str:
-    return os.path.expanduser("~/.config/solana/id.json")
+    return _G_KEYPAIR
 
-
-def load_keypair(path: str | None = None) -> Keypair:
-    """
-    Load a standard 64-byte Solana keypair file.
-    Falls back to an **ephemeral** random keypair if the file is missing.
-    """
-    path = path or _default_keyfile()
-    if not os.path.exists(path):
-        _note(f"Keyfile {path} not found – using random key.")
-        return Keypair()
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            secret = bytes(json.load(fh))
-        return Keypair.from_bytes(secret)
-    except Exception as exc:      # noqa: BLE001
-        _note(f"Could not load keyfile – {exc}; using random key.")
-        return Keypair()
-
-
-# ------------------------------------------------------------------------- #
-def _url_for(network: str) -> str:
-    """
-    Return the RPC URL for *network*, honouring overrides in secrets.json.
-    """
-    if network == "devnet":
-        return _CFG.get(
-            "rpc_override_devnet",
-            "https://api.devnet.solana.com",
-        )
-    # treat anything else as main-net
-    return _CFG.get(
-        "rpc_override_mainnet",
-        "https://api.mainnet-beta.solana.com",
-    )
-
-
-def get_solana_client(network: str = "devnet") -> Client:
-    url = _url_for(network)
-    if "helius" in url:
-        _note(f"using Helius endpoint → {url}")
-    return Client(url)
-
-
-# ------------------------------------------------------------------------- #
-def wallet_and_client(network: str = "devnet") -> Tuple[Wallet, Client]:
-    """
-    Convenience helper:
-
-        >>> wallet, client = wallet_and_client("mainnet")
-    """
+async def sign_and_send(
+    tx: Transaction, rpc_url: str, commitment: str = "confirmed"
+) -> str:
+    """Sign with our global Keypair, send via raw solana-py client."""
     kp = load_keypair()
-    return Wallet(kp), get_solana_client(network)
+    async with AsyncClient(rpc_url, commitment=commitment) as client:
+        tx.sign(kp)
+        resp = await client.send_transaction(tx, kp)
+        # optionally confirm
+        # await client.confirm_transaction(resp.value)
+        sig = resp.value
+        return sig

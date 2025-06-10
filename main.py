@@ -1,151 +1,92 @@
 """
 main.py
-────────────────────────────────────────────────────────────────────────────
-Phase-8-C (Birdeye feeds online)
-
-Features
-• Spot-trading demo loop (mock / devnet / mainnet)
-• DerivativesEngine scaffold
-• Mutation-Engine & Meme-Scanner (Birdeye trending)
-• ExecutionEngine selects mode from --env flag
+Phase 10.1 – top-level script that runs:
+   - background arbitrage loop (xdex_arbitrage_main)
+   - background meme-snipe loop (meme_snipe_main)
+   - optional synergy conductor logic
 """
 
-from __future__ import annotations
+import asyncio
+import signal
+import sys
+from typing import Dict, Any
 
-import time
-import argparse
+# background tasks
+from pipelines.xdex_arbitrage import xdex_arbitrage_main
+from pipelines.meme_snipe import meme_snipe_main
 
-# ─── Data & execution modules ──────────────────────────────────────────────
-from pipelines.data_pipeline import data_pipeline_init, fetch_sol_price
-from pipelines.execution_engine import (
-    execution_engine_init,
-    execute_trade,
-)
+# synergy conductor (optional)
+from agents.tywin_agent import TywinAgent
+from agents.wick_agent import WickAgent
+from core.synergy_conductor.conductor import SynergyConductor
 
-# ─── Core / agent stack ────────────────────────────────────────────────────
-from agents.synergy_conductor import (
-    synergy_conductor_init,
-    synergy_conductor_run,
-)
-from core.reflection_engine.reflection_engine import (
-    reflection_engine_init,
-    log_trade_outcome,
-    analyze_history_and_trigger_patch,
-    trade_history,
-)
-from core.patch_core.patch_core import patch_core_init, request_autopatch
-from core.ego_core.ego_core import ego_core_init
-from security.kill_switch import kill_switch_init, check_kill_switch_conditions
+# optional to gather real market_data for synergy logic
+# from pipelines.some_real_feed import get_market_data_stub
 
-from core.concurrency_manager.concurrency_manager import (
-    concurrency_manager_init,
-    start_god_awareness_thread,
-    latest_whale_alert,
-)
-from core.god_awareness.god_awareness import god_awareness_init
+_STOP_EVENT = asyncio.Event()
 
-# ─── Phase-7 scaffolds ─────────────────────────────────────────────────────
-from core.derivatives_engine.derivatives_engine import derivatives_engine_init
-from pipelines.position_manager import position_manager_init, PM
-
-# ─── Phase-8 stubs/feeds ───────────────────────────────────────────────────
-from core.mutation_engine import mutation_engine_init, propose_patch
-from intel.meme_scanner import meme_scanner_init, scan_feeds
-
-
-# ───────────────────────────────────────────────────────────────────────────
-def main(env: str = "mock", continuous: bool = False) -> None:
-    """
-    Entry-point.
-
-    Parameters
-    ----------
-    env : {"mock", "devnet", "mainnet"}
-        Determines how ExecutionEngine and DerivativesEngine behave.
-    continuous : bool
-        • False → run 3 demo cycles then exit
-        • True  → loop forever
-    """
-    print("[Main] Starting Phase-8-C initialisation…")
-
-    # ----- Phase-6 initialisers -------------------------------------------
-    data_pipeline_init()
-    execution_engine_init(env)          # NOTE: env passed through
-    synergy_conductor_init()
-    reflection_engine_init()
-    patch_core_init()
-    ego_core_init()
-    kill_switch_init()
-    god_awareness_init()
-    concurrency_manager_init()
-
-    # ----- Phase-7 scaffolds ----------------------------------------------
-    derivatives_engine_init()
-    position_manager_init()
-
-    # ----- Phase-8 stubs ---------------------------------------------------
-    mutation_engine_init()
-    meme_scanner_init()
-
-    # Background God-Awareness thread
-    start_god_awareness_thread()
-
-    emotional_state = "neutral"
-    loop_count      = 0
-    max_cycles      = float("inf") if continuous else 3
-
-    print("[Main] Entering trading loop…")
-    while loop_count < max_cycles:
-        loop_count += 1
-        print(f"\n[Main] Trade cycle #{loop_count}")
-
-        # ── Market data ----------------------------------------------------
-        market_data = fetch_sol_price()
-        market_data.update(scan_feeds())        # meme_hype injected
-        print(f"[Main] Market data: {market_data}")
-
-        # Shift emotion if whale alert
-        if latest_whale_alert["whale_alert"]:
-            emotional_state = "fear"
-
-        decision = synergy_conductor_run(market_data, emotional_state)
-        print(f"[Main] Decision: {decision}")
-
-        price = market_data.get("sol_price", 0.0)
-        execute_trade(decision, price)
-
-        # Mock PnL for reflection (until real fills wired)
-        pnl = 5.0 if "BUY" in decision else -10.0
-        log_trade_outcome(decision, price, pnl)
-
-        if analyze_history_and_trigger_patch():
-            request_autopatch()
-
+async def background_arbitrage_loop():
+    """Call xdex_arbitrage_main every 5 seconds until stop."""
+    while not _STOP_EVENT.is_set():
         try:
-            check_kill_switch_conditions(trade_history)
-        except Exception as exc:
-            print(f"[Main] {exc} – shutting down.")
-            break
+            await xdex_arbitrage_main()
+        except Exception as e:
+            print("[arbitrage_loop] Exception:", e)
+        await asyncio.sleep(5)
 
-        time.sleep(3)
+async def background_meme_snipe_loop():
+    """Call meme_snipe_main every 10 seconds until stop."""
+    while not _STOP_EVENT.is_set():
+        try:
+            await meme_snipe_main()
+        except Exception as e:
+            print("[meme_snipe_loop] Exception:", e)
+        await asyncio.sleep(10)
 
-    print("[Main] Loop complete.")
+async def synergy_loop(conductor: SynergyConductor):
+    """Optional synergy conductor loop. Could run every 4s or so."""
+    while not _STOP_EVENT.is_set():
+        try:
+            # naive: fetch some real-time data or partial stub
+            # e.g. market_data = get_market_data_stub()
+            market_data: Dict[str, Any] = {}
+            # synergy vote
+            signal = await conductor.vote(market_data)
+            # for demonstration, we just print:
+            print("[synergy_loop] final decision:", signal.action, "conf=", signal.confidence)
+        except Exception as e:
+            print("[synergy_loop] Exception:", e)
+        await asyncio.sleep(4)
 
+async def main():
+    # create synergy conductor if you want to run agent majority logic
+    agents = [TywinAgent(), WickAgent()]
+    conductor = SynergyConductor(agents=agents)
+    
+    # spawn background tasks
+    tasks = []
+    tasks.append(asyncio.create_task(background_arbitrage_loop()))
+    tasks.append(asyncio.create_task(background_meme_snipe_loop()))
+    tasks.append(asyncio.create_task(synergy_loop(conductor)))
 
-# ───────────────────────────────────────────────────────────────────────────
+    print("[main] Phase 10.1 loops started. Press Ctrl-C to stop.")
+    # wait for a stop signal
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+    for t in pending:
+        t.cancel()
+
+def _handle_sigint(sig, frame):
+    print("[main] Received Ctrl-C. Stopping loops…")
+    _STOP_EVENT.set()
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--env",
-        choices=["mock", "devnet", "mainnet"],
-        default="mock",
-        help="Select execution environment",
-    )
-    parser.add_argument(
-        "--continuous",
-        action="store_true",
-        help="Run indefinitely instead of 3 demo cycles",
-    )
-    args = parser.parse_args()
+    # handle Ctrl-C
+    signal.signal(signal.SIGINT, _handle_sigint)
+    # handle SIGTERM as well if you want graceful shutdown
+    signal.signal(signal.SIGTERM, _handle_sigint)
 
-    main(env=args.env, continuous=args.continuous)
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        print("[main] Shutting down…")
+        sys.exit(0)
