@@ -1,68 +1,62 @@
 """
 xdex_arbitrage.py
-────────────────────────────────────────────────────────────────────────────
-Phase 10 – Cross-DEX arb (Raydium ↔ Orca ↔ OpenBook).
-Uses:
- • BirdeyePro for real-time quotes,
- • TipAutoTuner for dynamic priority fee,
- • Execution mesh (exec_mesh.py) to route final tx.
-
-Min spread = 0.25%
+Phase 10.1 – Cross-DEX arb, real aggregator calls to Jupiter.
+We pick a route if spread≥0.25%.
 """
 
 import os
-from typing import Dict, Optional
-
+import requests
 import math
 import asyncio
-import random
 import time
 
 from pipelines.tip_auto_tuner import tip_auto_tuner
 from pipelines.exec_mesh import send_swap_transaction
-from core.scoring_engine.model import ScoringEngine
+from notifications.discord_notifier import notify_discord
 
-MIN_SPREAD_PCT = 0.25  # from 4o data, skip smaller
-SLIP_BUFFER = 0.0015   # e.g. 0.15% slippage margin for each leg
-EXEC_FEE_EST = 0.0003  # e.g. Jupiter aggregator overhead
+MIN_SPREAD_PCT = 0.25
 
-async def xdex_arbitrage_main(quote_data: Dict[str, float]) -> None:
+async def xdex_arbitrage_main() -> None:
     """
-    Called every ~3-5s with fresh aggregator quotes
-    quote_data example:
-      {
-        "ray_bid":  99.80,
-        "ray_ask":  100.20,
-        "orca_bid": 100.00,
-        "orca_ask": 100.30,
-        ...
-      }
-    We look for spread >= 0.25% and do a small-size in-and-out.
+    Called every ~5s in a loop, or however you prefer.
+    We'll fetch a route from Jupiter: example USDC->SOL
+    Then see if the best route is better than reference price by >=0.25%.
+    If yes => do the swap.
     """
-    # example simple RAY ↔ ORCA check
-    ray_ask = quote_data.get("ray_ask")
-    orca_bid = quote_data.get("orca_bid")
-    if not ray_ask or not orca_bid:
-        return
+    # For simplicity, we do a single direction: USDC->SOL
+    base_url = "https://quote-api.jup.ag/v6/quote"
+    params = {
+        "inputMint":  "FCqfQSujuPxy6V42UvafBhszGv6Zh26AJP3poacZxZV6",  # USDC (Wormhole)
+        "outputMint": "So11111111111111111111111111111111111111112",  # wSOL
+        "amount": 100_000_000,  # e.g. 100 USDC in decimal 6
+        "slippageBps": 20,
+    }
+    try:
+        resp = requests.get(base_url, params=params, timeout=3)
+        resp.raise_for_status()
+        data = resp.json()
+        route_list = data.get("data", [])
+        if not route_list:
+            return
+        best = route_list[0]  # highest outAmount
+        inAmount = best["inAmount"]
+        outAmount = best["outAmount"]
+        # convert to float:  USDC has 6 decimals, SOL has 9
+        out_sol = outAmount / 1e9
+        in_usdc = inAmount / 1e6
 
-    spread_pct = (orca_bid - ray_ask) / ray_ask * 100
-    if spread_pct < MIN_SPREAD_PCT:
-        return  # skip
+        # reference price?  let's assume 1 SOL ~ 20.0 USDC from some known feed
+        # naive approach
+        ref_price = 20.0
+        implied_price = in_usdc/out_sol if out_sol>0 else 9999
+        spread_pct = (ref_price - implied_price)/implied_price * 100
 
-    # Check if expectedProfit >= fees
-    # We'll do a 1 SOL or 1 token notional, your choice.
-    notional = 100.0  # e.g. 100 USDC
-    expectedProfit = (spread_pct / 100) * notional
-    # approximate cost in fees
-    #  - slip cost
-    #  - aggregator overhead
-    #  - tip cost is decided automatically by tip_auto_tuner
-    totalFees = notional * SLIP_BUFFER + notional * EXEC_FEE_EST
-    if expectedProfit < totalFees:
-        return
+        if spread_pct < MIN_SPREAD_PCT:
+            return
 
-    # if we pass checks, do the trade:
-    lamports_per_cu = tip_auto_tuner.get_tip_lamports()
-    await send_swap_transaction("RAY->ORCA", notional, lamports_per_cu)
-
-
+        # proceed with the trade
+        lamports_per_cu = tip_auto_tuner.get_tip_lamports()
+        await send_swap_transaction("USDC->SOL via Jupiter", 100.0, lamports_per_cu)
+        await notify_discord(f"🟢 ARB trade => usdc->sol spread={spread_pct:.2f}%")
+    except Exception as exc:
+        print("[xdex_arbitrage] error:", exc)
