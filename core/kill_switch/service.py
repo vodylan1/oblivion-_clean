@@ -1,70 +1,65 @@
 """
-Kill-Switch v2
-────────────────────────────────────────
-* Functional API:  arm / is_armed / trip
-* Legacy `KillSwitch` class so old code/tests still import it.
+Kill‑Switch v2
+────────────────────────────────────────────────────────────
+• Central panic switch toggled by risk‑manager, God‑Awareness,
+  or manual CLI.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from typing import Final, Optional
+from typing import Final
 
-_ARMED: bool = False
-_ARM_TS: Optional[float] = None  # epoch seconds
+from notifications.discord_notifier import notify_discord
 
-
-# ───────────────────────────────────────────────────────── functional API
-async def arm() -> None:
-    """Arm the global kill-switch (trading frozen)."""
-    global _ARMED, _ARM_TS
-    _ARMED = True
-    _ARM_TS = time.time()
-    print("[KillSwitch] ‼️  ARMED  ‼️")
-    # fire-and-forget Discord ping
-    try:
-        from notifications.discord_notifier import notify_discord
-        await notify_discord("⚠️ **Kill-Switch ARMED** – trading halted")
-    except Exception as exc:  # pragma: no cover
-        print("[KillSwitch] discord err:", exc)
+# ----------------------------------------------------------------─ state
+_FROZEN: bool = False
+_ARM_TS: float | None = None
+_REASON: str | None = None
+_LOCK: Final = asyncio.Lock()
 
 
+# ----------------------------------------------------------------─ helpers
 def is_armed() -> bool:
-    return _ARMED
+    return _FROZEN
 
 
-def arm_timestamp() -> Optional[float]:
+def arm_timestamp() -> float | None:
     return _ARM_TS
 
 
-async def trip() -> None:          # alias
-    await arm()
+async def arm() -> None:
+    """Manually arm (freeze) – no reason."""
+    await trip("manual‑arm")
 
 
-# ───────────────────────────────────────────────────────── legacy shim
-class KillSwitch:  # noqa: D101
-    """Back-compat wrapper — do **not** use in new code."""
-
-    @staticmethod
-    async def arm() -> None:
-        await trip()
-
-    @staticmethod
-    async def trip() -> None:
-        await trip()
-
-    @staticmethod
-    def armed() -> bool:
-        return is_armed()
-
-    # legacy test expected `.frozen()`
-    @staticmethod
-    def frozen() -> bool:  # noqa: D401
-        return is_armed()
+async def trip(reason: str) -> None:  # noqa: D401
+    """
+    Freeze all trading.  *reason* recorded for telemetry / discord.
+    Safe to call multiple times.
+    """
+    global _FROZEN, _ARM_TS, _REASON
+    async with _LOCK:
+        if _FROZEN:
+            return
+        _FROZEN = True
+        _ARM_TS = time.time()
+        _REASON = reason
+    await notify_discord(f"🔴 **Kill‑Switch ARMED**  reason=`{reason}`")
 
 
-# helper for idempotent awaits
-async def _maybe_await(val):  # type: ignore
-    if asyncio.iscoroutine(val):
-        await val
+def frozen() -> bool:  # backwards‑compat for tests
+    return _FROZEN
+
+
+# convenience alias expected by some legacy code
+KillSwitch = type(
+    "KillSwitch",
+    (),
+    {
+        "trip": staticmethod(trip),
+        "frozen": staticmethod(frozen),
+        "arm_timestamp": staticmethod(arm_timestamp),
+    },
+)
