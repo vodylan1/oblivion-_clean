@@ -1,6 +1,5 @@
 from agents.base import Agent, AgentMeta, TradeSignal
-from drafts.market_data import MarketData
-
+from core.common.market_data import MarketData
 
 class JohanShadowAgent(Agent):
     meta = AgentMeta(
