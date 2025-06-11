@@ -5,7 +5,7 @@ import os
 import time
 from typing import Optional
 
-from notifications.discord_notifier import notify_discord as discord_send
+from notifications.discord_notifier import notify_discord
 
 AUTO_UNFREEZE_MIN = int(os.getenv("KS_AUTO_UNFREEZE_MIN", "0"))  # 0 = manual
 
@@ -27,4 +27,6 @@ class KillSwitch:
             return
         cls._FROZEN = True
         cls._FROZE_AT = time.time()
-        await discord_send({"content": f"⛔ **Kill‑Switch tripped** – {reason}"})
+        # inside any alert code
+          await notify_discord("⚠️ Kill-Switch armed …")
+
