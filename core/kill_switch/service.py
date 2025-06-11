@@ -5,7 +5,7 @@ import os
 import time
 from typing import Optional
 
-from notifications.discord import send as discord_send
+from notifications.discord_notifier import notify_discord as discord_send
 
 AUTO_UNFREEZE_MIN = int(os.getenv("KS_AUTO_UNFREEZE_MIN", "0"))  # 0 = manual
 
