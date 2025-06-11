@@ -1,73 +1,70 @@
 """
-Kill‑Switch v2
+Kill-Switch v2
 ────────────────────────────────────────
-* Functional API for new code (`arm`, `is_armed`, `trip`).
-* Legacy `KillSwitch` class for older unit‑tests and CLI tooling.
-
-State is kept in‑memory; prod deployment can swap to Redis / KV.
+* Functional API:  arm / is_armed / trip
+* Legacy `KillSwitch` class so old code/tests still import it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from typing import Final
+from typing import Final, Optional
 
-# simple in‑process flag
 _ARMED: bool = False
-_ARM_TS: float | None = None  # epoch seconds
+_ARM_TS: Optional[float] = None  # epoch seconds
 
-# --------------------------------------------------------------------------- functional
+
+# ───────────────────────────────────────────────────────── functional API
 async def arm() -> None:
-    """Arm the global kill‑switch."""
+    """Arm the global kill-switch (trading frozen)."""
     global _ARMED, _ARM_TS
     _ARMED = True
     _ARM_TS = time.time()
     print("[KillSwitch] ‼️  ARMED  ‼️")
-    # fire & forget Discord (no circular import)
+    # fire-and-forget Discord ping
     try:
-        from notifications.discord_notifier import notify_discord  # late import
-        await notify_discord("⚠️ **Kill‑Switch ARMED** – trading halted")
+        from notifications.discord_notifier import notify_discord
+        await notify_discord("⚠️ **Kill-Switch ARMED** – trading halted")
     except Exception as exc:  # pragma: no cover
         print("[KillSwitch] discord err:", exc)
 
 
 def is_armed() -> bool:
-    """Return True if the global switch is armed."""
     return _ARMED
 
 
-def arm_timestamp() -> float | None:
-    """Epoch seconds when switch was armed (or None)."""
+def arm_timestamp() -> Optional[float]:
     return _ARM_TS
 
 
-# alias for compat with old test that calls `KillSwitch.trip()`
-async def trip() -> None:  # noqa: D401
+async def trip() -> None:          # alias
     await arm()
 
 
-# --------------------------------------------------------------------------- legacy shim
+# ───────────────────────────────────────────────────────── legacy shim
 class KillSwitch:  # noqa: D101
-    ARMED: Final[bool] = False  # class‑level constant, not used
+    """Back-compat wrapper — do **not** use in new code."""
 
-    # legacy code expected a `.arm()` **sync** method ⟹ redirect
     @staticmethod
-    async def arm() -> None:  # noqa: D401
-        await _maybe_await(arm())
+    async def arm() -> None:
+        await trip()
 
-    # some old modules called `.trip()` instead
     @staticmethod
-    async def trip() -> None:  # noqa: D401
-        await _maybe_await(trip())
+    async def trip() -> None:
+        await trip()
 
-    # and asked `.armed()` (note the past‑tense)
     @staticmethod
-    def armed() -> bool:  # noqa: D401
+    def armed() -> bool:
+        return is_armed()
+
+    # legacy test expected `.frozen()`
+    @staticmethod
+    def frozen() -> bool:  # noqa: D401
         return is_armed()
 
 
-# helper to await even if accidental double‑await
-async def _maybe_await(coro):  # type: ignore
-    if asyncio.iscoroutine(coro):
-        await coro
+# helper for idempotent awaits
+async def _maybe_await(val):  # type: ignore
+    if asyncio.iscoroutine(val):
+        await val

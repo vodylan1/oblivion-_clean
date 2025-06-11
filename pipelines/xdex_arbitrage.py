@@ -1,62 +1,84 @@
 """
 xdex_arbitrage.py
-Phase 10.1 – Cross-DEX arb, real aggregator calls to Jupiter.
-We pick a route if spread≥0.25%.
+──────────────────────────────────────────────────────────
+Phase 10.1  – live cross-DEX arb.
+• If *quotes* dict is supplied (unit-test) we skip HTTP.
+• Otherwise we call Jupiter v6 public quote API (USDC ➜ wSOL).
+
+A real production bot would loop over many pairs + amount sizes.
 """
 
-import os
-import requests
-import math
-import asyncio
-import time
+from __future__ import annotations
 
-from pipelines.tip_auto_tuner import tip_auto_tuner
+import asyncio
+import os
+import random
+import requests
+from typing import Dict, Optional
+
 from pipelines.exec_mesh import send_swap_transaction
+from pipelines.tip_auto_tuner import tip_auto_tuner
 from notifications.discord_notifier import notify_discord
 
-MIN_SPREAD_PCT = 0.25
+USDC_MINT = "FCqfQSujuPxy6V42UvafBhszGv6Zh26AJP3poacZxZV6"   # Wormhole
+WSOL_MINT = "So11111111111111111111111111111111111111112"
 
-async def xdex_arbitrage_main() -> None:
-    """
-    Called every ~5s in a loop, or however you prefer.
-    We'll fetch a route from Jupiter: example USDC->SOL
-    Then see if the best route is better than reference price by >=0.25%.
-    If yes => do the swap.
-    """
-    # For simplicity, we do a single direction: USDC->SOL
-    base_url = "https://quote-api.jup.ag/v6/quote"
+MIN_SPREAD_PCT = 0.25        # 0.25 % required before we fire
+REF_PRICE_FALLBACK = 20.0    # USDC per SOL if no oracle feed yet
+
+
+# ------------------------------------------------------------------------- helpers
+def _fetch_jupiter_quote() -> Optional[Dict[str, float]]:
+    """Call public Jupiter quote endpoint and return ask/bid for RAY/ORCA ex."""
+    base = "https://quote-api.jup.ag/v6/quote"
     params = {
-        "inputMint":  "FCqfQSujuPxy6V42UvafBhszGv6Zh26AJP3poacZxZV6",  # USDC (Wormhole)
-        "outputMint": "So11111111111111111111111111111111111111112",  # wSOL
-        "amount": 100_000_000,  # e.g. 100 USDC in decimal 6
+        "inputMint": USDC_MINT,
+        "outputMint": WSOL_MINT,
+        "amount": 100_000_000,          # 100 USDC
         "slippageBps": 20,
     }
     try:
-        resp = requests.get(base_url, params=params, timeout=3)
-        resp.raise_for_status()
-        data = resp.json()
-        route_list = data.get("data", [])
-        if not route_list:
+        r = requests.get(base, params=params, timeout=3)
+        r.raise_for_status()
+        data = r.json().get("data", [])
+        if not data:
+            return None
+        best = data[0]
+        # naive: assume ask from Raydium, bid from Orca – in real life we’d parse route
+        return {
+            "ray_ask": best["inAmount"] / 1e6,   # price paid in USDC
+            "orca_bid": best["outAmount"] / 1e9 * REF_PRICE_FALLBACK,
+        }
+    except Exception as exc:                     # pragma: no cover
+        print("[xdex] quote error:", exc)
+        return None
+
+
+# ------------------------------------------------------------------------- public
+async def xdex_arbitrage_main(quotes: Optional[Dict[str, float]] = None) -> None:
+    """
+    If *quotes* (dict) provided, trust it (unit-test mode).
+    Otherwise fetch from Jupiter and evaluate spread.
+    """
+    if quotes is None:
+        quotes = _fetch_jupiter_quote()
+        if quotes is None:
             return
-        best = route_list[0]  # highest outAmount
-        inAmount = best["inAmount"]
-        outAmount = best["outAmount"]
-        # convert to float:  USDC has 6 decimals, SOL has 9
-        out_sol = outAmount / 1e9
-        in_usdc = inAmount / 1e6
 
-        # reference price?  let's assume 1 SOL ~ 20.0 USDC from some known feed
-        # naive approach
-        ref_price = 20.0
-        implied_price = in_usdc/out_sol if out_sol>0 else 9999
-        spread_pct = (ref_price - implied_price)/implied_price * 100
+    ray_ask = quotes["ray_ask"]
+    orca_bid = quotes["orca_bid"]
+    spread_pct = (orca_bid - ray_ask) / ray_ask * 100
 
-        if spread_pct < MIN_SPREAD_PCT:
-            return
+    if spread_pct < MIN_SPREAD_PCT:
+        return  # not worth
 
-        # proceed with the trade
-        lamports_per_cu = tip_auto_tuner.get_tip_lamports()
-        await send_swap_transaction("USDC->SOL via Jupiter", 100.0, lamports_per_cu)
-        await notify_discord(f"🟢 ARB trade => usdc->sol spread={spread_pct:.2f}%")
-    except Exception as exc:
-        print("[xdex_arbitrage] error:", exc)
+    tip_lamports = tip_auto_tuner.get_tip_lamports()
+    await send_swap_transaction("USDC→SOL arb", 100.0, tip_lamports)
+    await notify_discord(
+        f"🟢 X-DEX ARB executed | spread={spread_pct:.2f}% | tip={tip_lamports}"
+    )
+
+
+# quick manual test
+if __name__ == "__main__":  # pragma: no cover
+    asyncio.run(xdex_arbitrage_main())
