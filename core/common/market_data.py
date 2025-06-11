@@ -3,9 +3,10 @@ MarketData — canonical 5-field snapshot shared by agents, scorer, risk mgr.
 """
 from pydantic import BaseModel
 
+
 class MarketData(BaseModel):
-    price: float          # last price (quote units)
-    lp_depth: float       # pool depth USD
-    meme_hype: int        # 0-100 sentiment
-    whale_inflow: float   # whale buy vol (SOL)
-    volatility: float     # σ %
+    price: float          # last trade price
+    lp_depth: float       # liquidity-pool depth in USD
+    meme_hype: int        # 0-100 sentiment score
+    whale_inflow: float   # recent whale buy volume (SOL)
+    volatility: float     # σ in percent
