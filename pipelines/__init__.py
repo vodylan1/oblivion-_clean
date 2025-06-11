@@ -1,34 +1,37 @@
 """
-pipelines package
+pipelines package bootstrap
 ────────────────────────────────────────────────────────────
-• Provides light‑weight stubs so legacy tests that import
-  `pipelines.execution_engine` or `pipelines.mev_stealth`
-  do not explode.
+• Imports main live modules if available.
+• Registers light stubs for legacy paths:
+    pipelines.execution_engine
+    pipelines.mev_stealth               (jitter / estimate_slippage)
 """
 
-import types
+from __future__ import annotations
+
 import importlib
 import sys
+import types
 
-# ----------------------------------------------------------------─ public modules
-for _m in ("exec_mesh", "xdex_arbitrage"):
+# ----------------------------------------------------------------─ try to import live modules
+for _mod in ("exec_mesh", "xdex_arbitrage"):
     try:
-        importlib.import_module(f"pipelines.{_m}")
+        importlib.import_module(f"pipelines.{_mod}")
     except Exception:  # pragma: no cover
-        print(f"[pipelines] warn: {_m} failed import – ok in stub context")
+        print(f"[pipelines] warn: {_mod} failed import – using stub")
 
-# ----------------------------------------------------------------─ legacy stubs
-def _noop(*_a, **_kw):  # noqa: D401
+# ----------------------------------------------------------------─ execution_engine legacy stub
+def _noop(*_a, **_k):  # noqa: D401
     return None
 
 
-stub_mod = types.ModuleType("pipelines.execution_engine")
-stub_mod.open_position = _noop
-stub_mod.close_position = _noop
-stub_mod.get_price = _noop
-sys.modules["pipelines.execution_engine"] = stub_mod
+exec_stub = types.ModuleType("pipelines.execution_engine")
+exec_stub.open_position = _noop
+exec_stub.close_position = _noop
+exec_stub.get_price = _noop
+sys.modules["pipelines.execution_engine"] = exec_stub
 
-# simple jitter stub for tests that import pipelines.mev_stealth.jitter
-stealth_stub = types.ModuleType("pipelines.mev_stealth")
-stealth_stub.jitter = _noop
-sys.modules["pipelines.mev_stealth"] = stealth_stub
+# ----------------------------------------------------------------─ mev_stealth helpers (re‑export real impl)
+from pipelines import mev_stealth as _ms  # type: ignore  # noqa: E402
+
+sys.modules["pipelines.mev_stealth"] = _ms
