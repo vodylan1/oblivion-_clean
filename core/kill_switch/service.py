@@ -1,37 +1,73 @@
 """
-Kill-Switch v2 – halts trading when cVaR or draw-down limits are breached.
+Kill‑Switch v2
+────────────────────────────────────────
+* Functional API for new code (`arm`, `is_armed`, `trip`).
+* Legacy `KillSwitch` class for older unit‑tests and CLI tooling.
+
+State is kept in‑memory; prod deployment can swap to Redis / KV.
 """
 
+from __future__ import annotations
+
 import asyncio
-from typing import Callable, Awaitable
+import time
+from typing import Final
 
-from notifications.discord_notifier import notify_discord
+# simple in‑process flag
+_ARMED: bool = False
+_ARM_TS: float | None = None  # epoch seconds
 
-TRIP_LISTENERS: list[Callable[[], Awaitable[None]]] = []
-_ARMED = False
-
-
-def register_listener(cb: Callable[[], Awaitable[None]]) -> None:
-    TRIP_LISTENERS.append(cb)
-
-
-async def _fire_all() -> None:
-    for cb in TRIP_LISTENERS:
-        try:
-            await cb()
-        except Exception as exc:
-            print("[KillSwitch] listener err:", exc)
-
-
+# --------------------------------------------------------------------------- functional
 async def arm() -> None:
-    """Activate the global kill-switch."""
-    global _ARMED
-    if _ARMED:
-        return
+    """Arm the global kill‑switch."""
+    global _ARMED, _ARM_TS
     _ARMED = True
-    await notify_discord("⚠️ **Kill-Switch armed** – trading halted")
-    await _fire_all()
+    _ARM_TS = time.time()
+    print("[KillSwitch] ‼️  ARMED  ‼️")
+    # fire & forget Discord (no circular import)
+    try:
+        from notifications.discord_notifier import notify_discord  # late import
+        await notify_discord("⚠️ **Kill‑Switch ARMED** – trading halted")
+    except Exception as exc:  # pragma: no cover
+        print("[KillSwitch] discord err:", exc)
 
 
 def is_armed() -> bool:
+    """Return True if the global switch is armed."""
     return _ARMED
+
+
+def arm_timestamp() -> float | None:
+    """Epoch seconds when switch was armed (or None)."""
+    return _ARM_TS
+
+
+# alias for compat with old test that calls `KillSwitch.trip()`
+async def trip() -> None:  # noqa: D401
+    await arm()
+
+
+# --------------------------------------------------------------------------- legacy shim
+class KillSwitch:  # noqa: D101
+    ARMED: Final[bool] = False  # class‑level constant, not used
+
+    # legacy code expected a `.arm()` **sync** method ⟹ redirect
+    @staticmethod
+    async def arm() -> None:  # noqa: D401
+        await _maybe_await(arm())
+
+    # some old modules called `.trip()` instead
+    @staticmethod
+    async def trip() -> None:  # noqa: D401
+        await _maybe_await(trip())
+
+    # and asked `.armed()` (note the past‑tense)
+    @staticmethod
+    def armed() -> bool:  # noqa: D401
+        return is_armed()
+
+
+# helper to await even if accidental double‑await
+async def _maybe_await(coro):  # type: ignore
+    if asyncio.iscoroutine(coro):
+        await coro
