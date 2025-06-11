@@ -1,32 +1,37 @@
-# core/kill_switch/service.py
-from __future__ import annotations
+"""
+Kill-Switch v2 – halts trading when cVaR or draw-down limits are breached.
+"""
 
-import os
-import time
-from typing import Optional
+import asyncio
+from typing import Callable, Awaitable
 
 from notifications.discord_notifier import notify_discord
 
-AUTO_UNFREEZE_MIN = int(os.getenv("KS_AUTO_UNFREEZE_MIN", "0"))  # 0 = manual
+TRIP_LISTENERS: list[Callable[[], Awaitable[None]]] = []
+_ARMED = False
 
 
-class KillSwitch:
-    _FROZEN: bool = False
-    _FROZE_AT: Optional[float] = None
+def register_listener(cb: Callable[[], Awaitable[None]]) -> None:
+    TRIP_LISTENERS.append(cb)
 
-    @classmethod
-    def frozen(cls) -> bool:
-        if cls._FROZEN and AUTO_UNFREEZE_MIN:
-            if time.time() - (cls._FROZE_AT or 0) > AUTO_UNFREEZE_MIN * 60:
-                cls._FROZEN = False
-        return cls._FROZEN
 
-    @classmethod
-    async def trip(cls, reason: str) -> None:
-        if cls._FROZEN:
-            return
-        cls._FROZEN = True
-        cls._FROZE_AT = time.time()
-        # inside any alert code
-          await notify_discord("⚠️ Kill-Switch armed …")
+async def _fire_all() -> None:
+    for cb in TRIP_LISTENERS:
+        try:
+            await cb()
+        except Exception as exc:
+            print("[KillSwitch] listener err:", exc)
 
+
+async def arm() -> None:
+    """Activate the global kill-switch."""
+    global _ARMED
+    if _ARMED:
+        return
+    _ARMED = True
+    await notify_discord("⚠️ **Kill-Switch armed** – trading halted")
+    await _fire_all()
+
+
+def is_armed() -> bool:
+    return _ARMED
