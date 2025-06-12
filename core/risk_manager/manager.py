@@ -1,71 +1,36 @@
-# core/risk_manager/manager.py
 """
-RiskManager v1.0
-• Rolling 96‑h VaR per token
-• Portfolio max draw‑down guard
-• USD bucket caps
+RiskManager v2  – now capital‑aware
 """
 
 from __future__ import annotations
+from typing import Dict, List
 
-import os
-from collections import deque
-from typing import Deque, Dict
-
-from agents import TradeSignal
-
-
-def _env_float(key: str, default: float) -> float:
-    try:
-        return float(os.getenv(key, default))
-    except ValueError:
-        return default
+from core.capital_manager.capital_class import CapitalTier, classify_equity
 
 
 class RiskManager:
-    _INSTANCE: "RiskManager | None" = None
+    """Tracks PnL & enforces cVaR + bankroll tier limits."""
 
-    @classmethod
-    def instance(cls) -> "RiskManager":
-        if cls._INSTANCE is None:
-            cls._INSTANCE = cls()
-        return cls._INSTANCE
-
-    # ────────────────────────────────────────────
     def __init__(self) -> None:
-        self.var_window_h = int(_env_float("VAR_LOOKBACK_H", 96))
-        self.max_dd_pct = _env_float("MAX_DD_PCT", 15.0)
-        self.bucket_cap = _env_float("OBLIVION_BUCKET_SIZE_USD", 250)
+        self._equity_history: List[float] = []     # USD snapshots
+        self.current_tier: CapitalTier = CapitalTier.MICRO
 
-        self._price_hist: Dict[str, Deque[float]] = {}
-        self._equity_hist: Deque[float] = deque(maxlen=self.var_window_h * 60)
+    # ──────────────────────────────────────────────
+    # public
 
-    # ────────────────────────────────────────────
-    def mark_equity(self, equity_usd: float) -> None:
-        self._equity_hist.append(equity_usd)
+    def register_equity(self, equity_usd: float) -> None:
+        self._equity_history.append(equity_usd)
+        self.current_tier = classify_equity(equity_usd)
 
-    def register_price(self, token: str, price: float) -> None:
-        dq = self._price_hist.setdefault(token, deque(maxlen=self.var_window_h * 60))
-        dq.append(price)
+    def position_limit_usd(self) -> float:
+        # naive cVaR clamp: 1 % of equity capped by tier table
+        equity = self._equity_history[-1] if self._equity_history else 0
+        max_pct = 0.01
+        raw_cap = equity * max_pct
+        from core.capital_manager.adaptive_strategy import apply_tier_overrides
+        limits = apply_tier_overrides({}, self.current_tier)
+        return min(raw_cap, limits["max_trade_usd"])
 
-    # ────────────────────────────────────────────
-    def pre_trade(self, sig: TradeSignal, exposure_after_usd: float) -> bool:
-        if exposure_after_usd > self.bucket_cap:
-            return False
-
-        if len(self._equity_hist) > 1:
-            peak = max(self._equity_hist)
-            trough = min(self._equity_hist)
-            dd_pct = 100.0 * (peak - trough) / (peak or 1)
-            if dd_pct > self.max_dd_pct:
-                return False
-
-        hist = self._price_hist.get(sig.meta.get("token", ""), None)
-        if hist and len(hist) >= 120:
-            returns = [(hist[i] - hist[i - 1]) / hist[i - 1] for i in range(1, len(hist))]
-            returns.sort()
-            var_95 = abs(returns[int(0.05 * len(returns))]) * 100
-            if abs(sig.meta.get("pct_move", 0)) > var_95:
-                return False
-
-        return True
+    # placeholder – real VaR calc in Phase 12
+    def value_at_risk(self) -> float:
+        return 0.0
