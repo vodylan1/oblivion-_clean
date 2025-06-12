@@ -1,0 +1,4 @@
+# requirements.txt  – minimum extra libs for Phase 10+
+httpx==0.23.3
+solana==0.29.0
+base58==2.1.1
