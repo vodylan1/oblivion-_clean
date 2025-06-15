@@ -20,6 +20,15 @@ class RiskManager:
             cls._INST = cls()
         return cls._INST
     # ------------------------------------------------------------------
+    @property
+    def bucket_cap(self) -> int:
+        """
+        Maximum lamports allowed for the next trade bucket.
+        Phase‑9 tests use this to verify position sizing.
+        """
+        return getattr(self, "_bucket_cap", 5_000_000_000)   # 5 SOL stub
+
+    # ------------------------------------------------------------------
     def pre_trade(self, signal: "TradeSignal", size_lamports: int) -> bool:  # noqa: F821
         """
         Light‑weight check used in unit tests:

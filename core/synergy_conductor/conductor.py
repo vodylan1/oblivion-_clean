@@ -47,6 +47,9 @@ class SynergyConductor:
         self._strategies: Dict[str, object] = {
             name: load_strategy(name) for name in STRATEGY_PRIORITY
         }
+    # ------------------------------------------------------------------
+    # Back‑compat alias for Phase‑7 unit‑tests
+    vote = tick          # .vote(...) now calls .tick(...)
 
     # ──────────────────────────────────────────────────────────────────────────
     async def tick(self, market_tick: dict | None = None) -> None:
