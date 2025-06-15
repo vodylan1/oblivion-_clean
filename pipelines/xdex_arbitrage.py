@@ -3,17 +3,16 @@ xdex_arbitrage.py
 Phase 10.2 – accepts injected quotes for unit‑test, uses RiskMgr size cap.
 """
 
-import os
-import requests
-import asyncio
-from typing import Dict, Optional
-
-from pipelines.tip_auto_tuner import tip_auto_tuner
-from pipelines.exec_mesh import send_swap_transaction
-from notifications.discord_notifier import notify_discord
+# pipelines/xdex_arbitrage.py  – header
+from __future__ import annotations
+import math, asyncio
 from core.risk_manager.manager import RiskManager
+from pipelines.exec_mesh import send_swap_transaction
+from pipelines.signal_utils import latency_spread
+from core.common.market_data import MarketData
 
-_risk_mgr = RiskManager()
+# use singleton accessor
+_risk_mgr = RiskManager.instance()
 
 MIN_SPREAD_PCT = 0.25
 
