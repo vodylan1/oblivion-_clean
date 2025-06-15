@@ -1,16 +1,23 @@
 """
-Risk‑Manager (Phase 9 stub upgraded for Phase 11)
-─────────────────────────────────────────────────
-* Singleton accessor via RiskManager.instance()
-* Bucket‑cap sizing helper for legacy tests
-* capital_tier() callable used by Phase 11 strategies
-  (returns 1 so strategies do not abort on tier 0)
+Risk‑Manager (Phase 11 stub)
+────────────────────────────
+Singleton with helpers needed by tests and Trump‑Card strategies.
 """
 
 from __future__ import annotations
 from typing import Optional, Any
 
 
+# ── helper: callable integer wrapper ─────────────────────────────────
+class _TierInt(int):                               # noqa: D401
+    """`tier = risk_mgr.capital_tier` gives int; tier() also returns int."""
+
+    # pylint: disable=no-self-use
+    def __call__(self) -> int:                     # type: ignore[override]
+        return int(self)
+
+
+# ── Risk‑Manager singleton ───────────────────────────────────────────
 class RiskManager:
     _INSTANCE: Optional["RiskManager"] = None
 
@@ -22,7 +29,6 @@ class RiskManager:
         cls._INSTANCE = inst
         return inst
 
-    # ------------------------------------------------------------------
     @classmethod
     def instance(cls) -> "RiskManager":
         if cls._INSTANCE is None:
@@ -30,47 +36,26 @@ class RiskManager:
         return cls._INSTANCE
 
     # ------------------------------------------------------------------
-    # constructors / config
     def __init__(self) -> None:
-        # basic bucket sizing stub (5 SOL)
-        self._bucket_cap: int = 5_000_000_000
+        self._bucket_cap: int = 5_000_000_000   # 5 SOL cap
 
-    # ------------------------------------------------------------------
-    # =====  SIMPLE HELPERS REQUIRED BY TESTS & STRATEGIES  ============
+        # Provide BOTH attribute and callable semantics
+        self.capital_tier: _TierInt = _TierInt(3)    # Tier 3 starter
 
+    # ===== Tests helpers =================================================
     @property
     def bucket_cap(self) -> int:
-        """Maximum lamports a single trade may use (legacy tests)."""
         return self._bucket_cap
 
-    def pre_trade(self, signal: "TradeSignal", size_lamports: int) -> bool:  # noqa: F821
-        """Return True if the trade is within the current bucket cap."""
+    def pre_trade(self, _signal: "TradeSignal", size_lamports: int) -> bool:  # noqa: F821
         return size_lamports <= self._bucket_cap
 
-    # Phase 11 strategy helper
-    def capital_tier(self) -> int:
-        """
-        Return risk‑tier integer.
-        Tier 0 would disable several strategies; we start at Tier 1.
-        """
-        return 1
-
-    # ------------------------------------------------------------------
-    # =====  MAIN RISK CHECK USED BY CONDUCTOR  ========================
-
-    def accept(self, signal: "TradeSignal") -> bool:  # noqa: F821
-        """
-        Basic always‑accept placeholder.
-        Real VaR / exposure logic lands in Phase 12.
-        """
+    # ===== Main accept logic (stub) ======================================
+    def accept(self, _signal: "TradeSignal") -> bool:  # noqa: F821
         return True
 
     async def assess_and_maybe_fire(self, signal: "TradeSignal") -> None:  # noqa: F821
-        """
-        Placeholder async hook invoked by conductor in live mode.
-        """
         if self.accept(signal):
-            # Real TX dispatch goes here in Phase 12
             print("[risk_mgr] would execute:", signal)
         else:
             print("[risk_mgr] rejected:", signal)
