@@ -1,9 +1,9 @@
 """
 Synergy Conductor · Phase 11
-───────────────────────────
-• Orchestrates high‑alpha strategy modules (“Trump Cards” + Pepe‑Mode)
-• Falls back to blended agent‑signals when no priority strategy fires
-• Keeps exponential‑decay performance weights for classic agents
+────────────────────────────
+Routes trade‑signals from high‑priority strategy modules
+(Trump Cards + Pepe Mode) and classic agents, then passes
+through the Risk‑Manager singleton.
 """
 
 from __future__ import annotations
@@ -12,113 +12,83 @@ import asyncio
 from collections import defaultdict
 from typing import Dict, List
 
-# ─── Local imports ──────────────────────────────────────────────────────────────
 from agents import Agent, TradeSignal
 from strategies import load as load_strategy
 from core.risk_manager.manager import RiskManager
 
-# Highest‑priority / most‑profitable modules are queried first
 STRATEGY_PRIORITY: list[str] = [
-    "atomic_arb",        # Phase 11 – bundle‑level MEV arb
-    "pepe_momentum",     # Moon‑shot momentum logic
-    "whale_shadow",      # Smart‑wallet follow / copy
-    "stealth_exec",      # Multi‑wallet laddering for large sizes
-    # ↓ anything after this line can be re‑ordered without changing meta
+    "atomic_arb",
+    "pepe_momentum",
+    "whale_shadow",
+    "stealth_exec",
 ]
 
-class SynergyConductor:
-    """
-    Top‑level orchestration hub.
-    """
 
-    # ──────────────────────────────────────────────────────────────────────────
+class SynergyConductor:
+    # ──────────────────────────────────────────────────────────────────
     def __init__(
         self,
         agents: List[Agent],
         risk_mgr: RiskManager | None = None,
         decay: float = 0.995,
     ) -> None:
-        self._agents: List[Agent] = agents
+        self._agents = agents
         self._risk_mgr: RiskManager = risk_mgr or RiskManager.instance()
-        self._decay: float = decay                       # weight EMA factor
+        self._decay = decay
         self._weights: Dict[str, float] = defaultdict(lambda: 1.0)
-
-        # Dynamically load every high‑alpha module once at start‑up
         self._strategies: Dict[str, object] = {
-            name: load_strategy(name) for name in STRATEGY_PRIORITY
+            n: load_strategy(n) for n in STRATEGY_PRIORITY
         }
-    # ------------------------------------------------------------------
-    # Back‑compat alias for Phase‑7 unit‑tests
-    vote = tick          # .vote(...) now calls .tick(...)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    async def tick(self, market_tick: dict | None = None) -> None:
-        """
-        Entry point called each slot / websocket update.
-        • market_tick can contain order‑book, sentiment, etc.
-        """
-        # 1) High‑priority “Trump Card” scan
-        sig = await self._decide(market_tick or {})
-        if sig is None:
-            return
+    # ──────────────────────────────────────────────────────────────────
+    async def tick(self, market_tick: dict | None = None) -> TradeSignal | None:
+        """Single polling step; returns the TradeSignal chosen (or None)."""
+        market_tick = market_tick or {}
 
-        # 2) Risk‑manager final check & fire
-        await self._risk_mgr.assess_and_maybe_fire(sig)
-
-    # ──────────────────────────────────────────────────────────────────────────
-    async def _decide(self, market_tick: dict) -> TradeSignal | None:
-        """
-        Returns best TradeSignal from either specialised strategy
-        or classical blended agents.
-        """
-        # ── Pass A: specialised strategies in strict priority order ─────────
+        # Pass A – high‑priority strategies
         for name in STRATEGY_PRIORITY:
-            strat = self._strategies.get(name)
-            if strat is None:
-                continue
+            strat = self._strategies[name]
             try:
-                sig: TradeSignal | None = await strat.decide(market_tick)
-                if sig and self._risk_mgr.accept(sig):
-                    return sig                       # fire immediately
-            except Exception as exc:                 # never crash loop
-                print(f"[conductor] {name} error:", exc)
-
-        # ── Pass B: legacy multi‑agent blend (EMA‑weighted) ────────────────
-        signals: list[TradeSignal] = []
-        for agent in self._agents:
-            try:
-                s = await agent.tick(market_tick)
-                if s:
-                    signals.append(s)
+                sig = await strat.decide(market_tick)
             except Exception as exc:
-                print(f"[conductor] agent {agent.name} error:", exc)
+                print(f"[conductor] {name} error:", exc)
+                sig = None
+
+            if sig and self._risk_mgr.accept(sig):
+                return sig
+
+        # Pass B – legacy agents
+        signals: list[TradeSignal] = []
+        for ag in self._agents:
+            try:
+                s = await ag.tick(market_tick)
+            except Exception as exc:
+                print(f"[conductor] agent {ag.name} error:", exc)
+                s = None
+            if s:
+                signals.append(s)
 
         if not signals:
             return None
 
-        # Rank by confidence × performance weight
-        ranked = sorted(
-            signals,
-            key=lambda s: s.confidence * self._weights[s.agent],
-            reverse=True,
-        )
-        return ranked[0]
+        # rank by confidence × EMA weight
+        best = max(signals, key=lambda s: s.confidence * self._weights[s.agent])
+        return best
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────────────
     def reward(self, agent_name: str, pnl_pct: float) -> None:
-        """
-        Called by PnL callback to update agent weights (EMA).
-        """
+        """EMA weight update from daily PnL callback."""
         self._weights[agent_name] = (
             self._weights[agent_name] * self._decay + pnl_pct * (1 - self._decay)
         )
 
-    # optional convenience
-    async def run_forever(self, poll_delay: float = 0.4) -> None:
-        """
-        Simple while‑True loop for quick local testing.
-        In production you’ll likely be driven by websocket callbacks instead.
-        """
+    # ── Back‑compat alias for older tests ────────────────────────────
+    async def vote(self, market_tick: dict | None = None) -> TradeSignal | None:
+        """Alias kept for Phase‑7 unit‑tests; delegates to tick()."""
+        return await self.tick(market_tick)
+
+    # optional helper -------------------------------------------------
+    async def run_forever(self, delay: float = 0.4) -> None:
         while True:
             await self.tick({})
-            await asyncio.sleep(poll_delay)
+            await asyncio.sleep(delay)
