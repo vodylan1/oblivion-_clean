@@ -1,17 +1,21 @@
 """
-signal_utils.py
---------------------------------------------------------
-Utility helpers for alpha‑signal post‑processing
-Phase 10.2 – adds latency‑decay on confidence.
+Shared helpers for latency‑aware spread maths and misc signal utilities.
 """
 
-import math
-
-# half‑life = 60 seconds → λ
-_DECAY_LAMBDA = math.log(2) / 60.0
+from __future__ import annotations
 
 
-def decay_confidence(raw_conf: float, signal_age_sec: float) -> float:
-    """Exponential decay; returns conf in [0,1]."""
-    decayed = raw_conf * math.exp(-_DECAY_LAMBDA * max(signal_age_sec, 0))
-    return max(0.0, min(1.0, decayed))
+def latency_spread(ray_ask: float, orca_bid: float, tip_pct: float = 0.0015) -> float:
+    """
+    Return the effective gross spread after subtracting latency / tip cost.
+
+    * `ray_ask`  – best ask on Raydium
+    * `orca_bid` – best bid on Orca
+    * `tip_pct`  – extra % edge required to cover bundle tip  (default 0.15 %)
+
+    Example:
+        >>> latency_spread(99.8, 100.3)   # ≈ 0.0035 (0.35 %)
+    """
+    raw = (orca_bid - ray_ask) / ray_ask
+    edge = raw - tip_pct
+    return max(0.0, edge)

@@ -1,43 +1,17 @@
 """
-Experimental Threat‑Score stub
-Enabled only if EXPERIMENTAL_THREAT_SCORE=true
+God‑Awareness · Threat‑Score  (placeholder)
+
+Phase‑13 will supply a real ML model; for now the module must compile so
+import‑guard tests can scan the repo without choking on invalid syntax.
 """
 
-import os
-from typing import Dict
-
-FLAG = os.getenv("EXPERIMENTAL_THREAT_SCORE", "false").lower() == "true"
+from __future__ import annotations
+from typing import Any
 
 
-def score(snapshot: Dict) -> float:          # 0‑1 threat level
-
-
-# ───────────────────────────
-# 0 · checkout working branch
-# ───────────────────────────
-git checkout phase-7-agent-activation
-
-# ───────────────────────────
-# 1 · add / replace files
-# ───────────────────────────
-# A) threat_score stub  ───────────────
-mkdir -p core/god_awareness
-cat > core/god_awareness/threat_score.py <<'PY'
-"""
-Experimental Threat‑Score stub
-Enabled only if EXPERIMENTAL_THREAT_SCORE=true
-"""
-
-import os
-from typing import Dict
-
-FLAG = os.getenv("EXPERIMENTAL_THREAT_SCORE", "false").lower() == "true"
-
-
-def score(snapshot: Dict) -> float:          # 0‑1 threat level
-    if not FLAG:
-        return 0.0
-    # ultra‑light heuristic until Phase‑9 matrix lands
-    rug_flag = snapshot.get("rug_score", 0)
-    whale_exits = snapshot.get("whale_sell_vol", 0)
-    return min(1.0, 0.2 * rug_flag + 0.8 * whale_exits / 10_000)
+def assess_threat(context: dict[str, Any] | None = None) -> float:
+    """
+    Dummy implementation that always returns zero threat.
+    Real code will blend on‑chain telemetry, social feeds and flow data.
+    """
+    return 0.0
