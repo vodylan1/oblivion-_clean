@@ -1,0 +1,7 @@
+min_z: 2.5
+min_flow:
+  micro: 15000
+  small: 30000
+  mid:   75000
+  large: 150000
+  whale: 300000

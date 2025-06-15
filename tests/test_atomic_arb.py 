@@ -1,0 +1,31 @@
+import asyncio, pytest
+from strategies.atomic_arb.strategy import Strategy as ArbStrat
+from strategies.pepe_mode.strategy import Strategy as PepeStrat
+from strategies.whale_shadow.strategy import Strategy as WhaleStrat
+from strategies.stealth_exec.strategy import Strategy as StealthStrat
+
+@pytest.mark.asyncio
+async def test_atomic_decision():
+    s = ArbStrat()
+    sig = await s.decide({"token": "SOL/USDC", "mock_spread_bps": 15})
+    assert sig and sig.action == "ATOMIC_ARB"
+
+@pytest.mark.asyncio
+async def test_pepe_trigger():
+    sig = await PepeStrat().decide({"token": "PEPE", "momentum_score": 0.9})
+    assert sig and sig.action == "BUY_HOLD_PEP"
+
+@pytest.mark.asyncio
+async def test_whale_shadow():
+    sig = await WhaleStrat().decide(
+        {"token": "TRUMP", "whale_flow_usd": 200000, "price_z": 3.1}
+    )
+    assert sig.token == "TRUMP"
+
+def test_stealth_split():
+    sig = asyncio.run(
+        StealthStrat().decide(
+            {"token": "BONK", "intent_size_usd": 15000, "dex_depth_usd": 100000}
+        )
+    )
+    assert sig.aux["parts"] >= 2
