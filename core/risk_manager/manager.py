@@ -28,6 +28,13 @@ class RiskManager:
         """
         return getattr(self, "_bucket_cap", 5_000_000_000)   # 5 SOL stub
 
+    # Phase‑11 strategies query this attribute; until dynamic PnL sizing
+    # lands in Phase 12 we hard‑code Tier 0.
+    @property
+    def capital_tier(self) -> int:
+        return 0        # 0 = micro‑cap starter tier
+
+
     # ------------------------------------------------------------------
     def pre_trade(self, signal: "TradeSignal", size_lamports: int) -> bool:  # noqa: F821
         """

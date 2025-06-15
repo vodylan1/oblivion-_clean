@@ -1,7 +1,9 @@
 """
 Synergy Conductor · Phase 11
-Routes Trump‑Card strategies and legacy agents, with full unit‑test
-back‑compat (vote alias, HOLD fallback).
+────────────────────────────
+• Queries high‑priority “Trump Card” strategies in strict priority order.
+• Falls back to legacy agents (Phase 7/8) and keeps backward‑compat helpers
+  such as `.vote()` and neutral HOLD fallbacks.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ class SynergyConductor:
     # ────────────────────────────────────────────────────────────────
     def __init__(
         self,
-        agents: List[Any],
+        agents: List[Any],                       # allow bare HoldAgent stubs
         risk_mgr: RiskManager | None = None,
         decay: float = 0.995,
     ) -> None:
@@ -34,7 +36,7 @@ class SynergyConductor:
     async def tick(self, market_tick: dict | None = None) -> TradeSignal | None:
         market_tick = market_tick or {}
 
-        # Pass A – priority strategies
+        # Pass A – high‑priority strategies
         for name in STRATEGY_PRIORITY:
             try:
                 sig = await self._strategies[name].decide(market_tick)
@@ -44,7 +46,7 @@ class SynergyConductor:
             if sig and self._risk_mgr.accept(sig):
                 return sig
 
-        # Pass B – legacy / Hold agents
+        # Pass B – legacy / simple agents
         signals: list[TradeSignal] = []
         for ag in self._agents:
             coro: Callable[[dict], Awaitable | None] | None = (
@@ -61,22 +63,27 @@ class SynergyConductor:
                 signals.append(res)
 
         if not signals:
-            # neutral placeholder so old tests always get a signal
+            # Emit neutral placeholder so old tests & callers always get a signal
             return TradeSignal(action="HOLD", confidence=0.0, meta={})
 
-        return max(signals, key=lambda s: s.confidence * self._weights[s.agent])
+        # safe scorer (legacy signals may lack .agent)
+        def _score(sig: TradeSignal) -> float:
+            agent_name = getattr(sig, "agent", "LEGACY")
+            return sig.confidence * self._weights[agent_name]
 
-    # weight update --------------------------------------------------
+        return max(signals, key=_score)
+
+    # ────────────────────────────────────────────────────────────────
     def reward(self, agent_name: str, pnl_pct: float) -> None:
         self._weights[agent_name] = (
             self._weights[agent_name] * self._decay + pnl_pct * (1 - self._decay)
         )
 
-    # back‑compat alias ---------------------------------------------
+    # back‑compat alias ------------------------------------------------
     async def vote(self, market_tick: dict | None = None) -> TradeSignal | None:
         return await self.tick(market_tick)
 
-    # simple loop helper --------------------------------------------
+    # helper loop ------------------------------------------------------
     async def run_forever(self, delay: float = 0.4) -> None:
         while True:
             await self.tick({})
