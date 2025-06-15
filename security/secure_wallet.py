@@ -36,3 +36,16 @@ async def sign_and_send(tx: Any, rpc_url: str) -> str:  # noqa: ANN401
     """
     print(f"[secure_wallet] sign_and_send → {rpc_url}")
     return os.urandom(32).hex()
+
+# ---------------------------------------------------------------------
+def get_solana_client(rpc_url: str = "https://api.mainnet-beta.solana.com") -> object:
+    """
+    Dummy RPC client for unit tests.
+    Real implementation will return `AsyncClient` from solana‑py.
+    """
+    class _Client:                   # noqa: D401
+        def __init__(self, url: str) -> None:
+            self.endpoint = url
+        async def get_balance(self, pubkey: str) -> dict:     # type: ignore[override]
+            return {"result": {"value": 10_000_000_000}}      # 10 SOL stub
+    return _Client(rpc_url)

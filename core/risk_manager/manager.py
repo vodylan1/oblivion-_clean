@@ -1,5 +1,5 @@
 """
-RiskManager v2  – now capital‑aware
+RiskManager v2.1  – singleton + capital‑aware sizing
 """
 
 from __future__ import annotations
@@ -9,24 +9,42 @@ from core.capital_manager.capital_class import CapitalTier, classify_equity
 
 
 class RiskManager:
-    """Tracks PnL & enforces cVaR + bankroll tier limits."""
+    """Tracks PnL, bankroll tier and size limits (singleton)."""
 
+    _INST: "RiskManager | None" = None
+
+    # ── singleton helper ──────────────────────────
+    @classmethod
+    def instance(cls) -> "RiskManager":
+        if cls._INST is None:
+            cls._INST = cls()
+        return cls._INST
+    # ------------------------------------------------------------------
+    def pre_trade(self, signal: "TradeSignal", size_lamports: int) -> bool:  # noqa: F821
+        """
+        Light‑weight check used in unit tests:
+        returns True if the requested size is below current bucket cap.
+        """
+        return size_lamports <= self.bucket_cap
+
+    # ── ctor ──────────────────────────────────────
     def __init__(self) -> None:
-        self._equity_history: List[float] = []     # USD snapshots
+        if RiskManager._INST is not None:
+            # enforce singleton – users should call instance()
+            raise RuntimeError("RiskManager is a singleton; use RiskManager.instance()")
+        self._equity_history: List[float] = []
         self.current_tier: CapitalTier = CapitalTier.MICRO
 
-    # ──────────────────────────────────────────────
-    # public
-
+    # ── public API ────────────────────────────────
     def register_equity(self, equity_usd: float) -> None:
         self._equity_history.append(equity_usd)
         self.current_tier = classify_equity(equity_usd)
 
     def position_limit_usd(self) -> float:
-        # naive cVaR clamp: 1 % of equity capped by tier table
+        """Return the hard cap for a single trade, USD."""
         equity = self._equity_history[-1] if self._equity_history else 0
-        max_pct = 0.01
-        raw_cap = equity * max_pct
+        raw_cap = equity * 0.01  # 1 % default risk slice
+
         from core.capital_manager.adaptive_strategy import apply_tier_overrides
         limits = apply_tier_overrides({}, self.current_tier)
         return min(raw_cap, limits["max_trade_usd"])
