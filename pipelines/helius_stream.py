@@ -1,13 +1,15 @@
-# --- replace the existing helius_stream.py entirely -------------------
-
 from __future__ import annotations
 import os, json, aiohttp, asyncio
 from pathlib import Path
 from typing import Dict, Any, List
 
-HELIUS_KEY = os.getenv("HELIUS_API_KEY")
-WS_URL     = f"wss://stream.helius.xyz/v0/solana/mainnet?api-key={HELIUS_KEY}"
-POOL_FILE  = Path("wallets/stealth_pool.json")
+# personalise for your Helius tenant ----------------------------
+HELIUS_KEY   = os.getenv("HELIUS_API_KEY")
+
+WS_URL_V1    = f"wss://mainnet.helius-rpc.com/?api-key={HELIUS_KEY}"
+WS_URL_V0    = f"wss://atlas-mainnet.helius-rpc.com/?api-key={HELIUS_KEY}"
+
+POOL_FILE    = Path("wallets/stealth_pool.json")
 QUEUE: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=1_000)
 
 
@@ -25,7 +27,7 @@ async def helius_stream_task() -> None:
 
     try:
         async with aiohttp.ClientSession() as sess, \
-                   sess.ws_connect(WS_URL, autoping=True, heartbeat=15) as ws:
+                   sess.ws_connect(WS_URL_V1, autoping=True, heartbeat=15) as ws:
 
             # subscribe each account individually
             for pk in _stealth_pubkeys():
@@ -35,6 +37,7 @@ async def helius_stream_task() -> None:
                     "method":  "accountSubscribe",
                     "params":  [pk, {"encoding": "base64", "commitment": "processed"}],
                 })
+
             print("[helius] subscribed to", len(_stealth_pubkeys()), "accounts")
 
             async for msg in ws:
@@ -44,6 +47,8 @@ async def helius_stream_task() -> None:
     except Exception as exc:
         print("[helius] stream error:", exc)
 
+
+# ---------------------------------------------------------------------------
 
 async def get_next_tick() -> Dict[str, Any]:
     return await QUEUE.get()
