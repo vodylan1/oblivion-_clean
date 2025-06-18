@@ -11,8 +11,8 @@ import os, json, aiohttp, asyncio
 from pathlib import Path
 from typing import Dict, Any, List
 
-HELIUS_KEY = os.getenv("HELIUS_API_KEY")           # export in shell
-WS_URL     = f"wss://helius-mainnet.rpcpool.com/?api-key={HELIUS_KEY}"
+HELIUS_KEY = os.getenv("HELIUS_API_KEY")
+WS_URL     = f"wss://stream.helius.xyz/v0/solana/mainnet?api-key={HELIUS_KEY}"
 POOL_FILE  = Path("wallets/stealth_pool.json")
 
 QUEUE: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=1_000)
