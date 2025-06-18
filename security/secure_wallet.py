@@ -1,51 +1,52 @@
 """
-Secure‑wallet helper (unit‑test stub).
-Compatible with solana‑py 0.29.x  (Keypair lives in `solders` wheels).
+Secure‑Wallet · Phase 11.1
+Signs transactions and submits Jito bundles via raw HTTP.
 """
+
 from __future__ import annotations
-import json, pathlib, os
-from typing import Any
+import os, base64, json, aiohttp, asyncio
+from typing import List
 
-try:                                # solana‑py ≤0.30
-    from solana.keypair import Keypair
-except ModuleNotFoundError:         # fallback for 0.29 build
-    from solders.keypair import Keypair
+from solders.keypair import Keypair
+from solders.transaction import Transaction
+from .key_store import load_keypair          # <- your existing helper
 
-_KEY_PATH = pathlib.Path("oblivion_key.json")
-
-
-# ---------------------------------------------------------------------
-def _load_raw_secret() -> list[int]:
-    if not _KEY_PATH.exists():
-        # create  by default for unit tests (unsafe for prod!)
-        kp = Keypair()
-        _KEY_PATH.write_text(json.dumps(list(kp.to_bytes())))
-        return list(kp.to_bytes())
-    return json.loads(_KEY_PATH.read_text())
+JITO_RELAY = os.getenv(
+    "JITO_RELAY",
+    "https://frankfurt.mainnet.block-engine.jito.wtf/api/v1/bundles",
+)
+JITO_AUTH  = os.getenv("JITO_AUTH")          # <-- set this in shell
 
 
-def load_keypair() -> Keypair:
-    return Keypair.from_bytes(bytes(_load_raw_secret()))
-
-
-# ---------------------------------------------------------------------
-async def sign_and_send(tx: Any, rpc_url: str) -> str:  # noqa: ANN401
+async def sign_and_send(txs: List[Transaction], wallet_name: str) -> str:
     """
-    Dummy implementation – just returns a fake signature in tests.
-    Real signer will send through Jito bundle relay in live mode.
+    Sign each Transaction with `wallet_name` keypair, submit bundle, return signature str.
     """
-    print(f"[secure_wallet] sign_and_send → {rpc_url}")
-    return os.urandom(32).hex()
+    if JITO_AUTH is None:
+        raise RuntimeError("JITO_AUTH env var missing")
 
-# ---------------------------------------------------------------------
-def get_solana_client(rpc_url: str = "https://api.mainnet-beta.solana.com") -> object:
-    """
-    Dummy RPC client for unit tests.
-    Real implementation will return `AsyncClient` from solana‑py.
-    """
-    class _Client:                   # noqa: D401
-        def __init__(self, url: str) -> None:
-            self.endpoint = url
-        async def get_balance(self, pubkey: str) -> dict:     # type: ignore[override]
-            return {"result": {"value": 10_000_000_000}}      # 10 SOL stub
-    return _Client(rpc_url)
+    kp: Keypair = load_keypair(wallet_name)
+
+    # sign & encode
+    b64_txs = []
+    for tx in txs:
+        signed = tx.sign([kp])
+        b64_txs.append(base64.b64encode(bytes(signed)).decode())
+
+    bundle = {"transactions": b64_txs}
+
+    async with aiohttp.ClientSession() as sess:
+        headers = {"Authorization": f"Bearer {JITO_AUTH}"}
+        async with sess.post(JITO_RELAY, json=bundle, headers=headers, timeout=5) as r:
+            body = await r.text()
+            if r.status != 200:
+                raise RuntimeError(f"Jito error {r.status}: {body}")
+
+            # Jito returns {"signature": "<first-tx-sig>", ...}
+            sig = json.loads(body)["signature"]
+            return sig
+
+
+# convenience helper for single‑tx callers
+async def send_single(tx: Transaction, wallet_name: str) -> str:
+    return await sign_and_send([tx], wallet_name)
