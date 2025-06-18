@@ -19,3 +19,4 @@ torch==2.2.2+cpu
 
 PyYAML==6.0.1          # YAML loader for atomic_arb params
 
+PyYAML==6.0.2
