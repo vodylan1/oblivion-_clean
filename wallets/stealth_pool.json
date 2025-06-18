@@ -24,7 +24,7 @@
     },
     {
       "name": "stealth-5",
-      "pubkey": "866hi74ZbqC1XK7GCYaJd5Tc2YTcPrDbc8oBkdoqZihK"
+      "pubkey": "7DRsuSXSKQpFvRC1H512q9qBgFhbd1S1qM59oGAsHREN"
     },
     {
       "name": "stealth-6",
@@ -34,5 +34,6 @@
       "name": "stealth-7",
       "pubkey": "5j5bH472bKy7ZrS8QwDkDx9CKyYXfX2wbxPum6fAUo8J"
     }
+
   ]
 }
