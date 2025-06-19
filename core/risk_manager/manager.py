@@ -52,6 +52,6 @@ class RiskManager:
         if self.accept(sig):
             print("[risk_mgr] would execute:", sig)
 
-    # ---------------- TEMPORARY override for Phase 11-a -------------------
-    def capital_tier(self) -> int:
-        return 0  # ← temporarily disable tier gating for
+    # ── TEMP stub: disable gating so placeholder strats stop raising error 5
+    def capital_tier(self) -> int:          # Phase 11‑c will restore logic
+        return 0
