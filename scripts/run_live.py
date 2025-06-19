@@ -1,41 +1,80 @@
+#!/usr/bin/env python
 """
-CLI wrapper that launches Oblivion with command‑line overrides.
+Entry point used during Phase‑11 soak‑tests.
 
-Usage examples
---------------
-$ python scripts/run_live.py                         # default RPC / relay
-$ SOLANA_RPC=https://ssc-dao.genesysgo.net/ \
-  python scripts/run_live.py --skip-bundles          # dry‑run without Jito
+* Boots SynergyConductor + Helius stream
+* Optional `--skip-bundles` flag disables Jito submissions
+* Emits Discord start/stop notifications
 """
-
 from __future__ import annotations
-import argparse, asyncio, os, sys, pathlib
 
-# Ensure repo root is on import path when executed from sub‑dir
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+import argparse
+import asyncio
+import signal
+import sys
+from pathlib import Path
 
-import main                                             # noqa: E402
-from notifications.discord_notifier import notify_discord  # ✅ Alert system
+# --- project imports ---------------------------------------------------------
+# Ensure project root is on PYTHONPATH when executed as `python scripts/run_live.py`
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
-# ── argparse ------------------------------------------
-p = argparse.ArgumentParser(description="Run Oblivion Phase 11 live loop")
-p.add_argument("--skip-bundles", action="store_true",
-               help="Disable Jito bundle submission (debug)")
-p.add_argument("--delay", type=float, default=0.35,
-               help="Polling delay seconds (default 0.35)")
-args = p.parse_args()
+from core.synergy_conductor.conductor import SynergyConductor
+from core.risk_manager.manager import RiskManager
+from notifications.discord_notifier import notify_discord, DiscordEmoji
+from agents.hold_agent import HoldAgent                     # ultra‑light stub
+from pipelines.helius_stream import helius_stream_task
+from pipelines.jito_metrics import start_metrics_flusher
+from security.secure_wallet import sign_and_send
 
-# ── runtime flag injection ----------------------------
-if args.skip_bundles:
-    os.environ["OBLIVION_NO_BUNDLES"] = "1"
+# --------------------------------------------------------------------------- #
 
-# ── main event loop ------------------------------------
-async def _go() -> None:
-    notify_discord("🟢 Oblivion booting …")  # ✅ Start-up ping
-    await main.conductor.run_forever(delay=args.delay)
+parser = argparse.ArgumentParser(description="Run Oblivion live loop")
+parser.add_argument("--skip-bundles", action="store_true",
+                    help="Disable Jito bundle submission (dry‑run)")
+parser.add_argument("--delay", type=float, default=0.25,
+                    help="Loop sleep in seconds (default 0.25)")
+args = parser.parse_args()
+
+# --------------------------------------------------------------------------- #
+
+risk_mgr = RiskManager.instance()
+agents   = [HoldAgent()]                         # legacy agent pool
+conductor = SynergyConductor(
+    agents,
+    risk_mgr=risk_mgr,
+    enable_bundles=not args.skip_bundles,
+    bundle_sender=sign_and_send,                 # dependency‑injector
+)
+
+# --- graceful shutdown ------------------------------------------------------ #
+_shutdown_event = asyncio.Event()
+
+
+def _on_signal(sig_name: str) -> None:
+    print(f"[run_live] Caught {sig_name} – shutting down …")
+    _shutdown_event.set()
+
+
+# Register for Ctrl‑C / kill
+signal.signal(signal.SIGINT,  lambda *_: _on_signal("SIGINT"))
+signal.signal(signal.SIGTERM, lambda *_: _on_signal("SIGTERM"))
+
+
+async def _main() -> None:
+    notify_discord("Oblivion **booting** on mainnet", DiscordEmoji.GREEN_CIRCLE)
+
+    # Fire‑and‑forget background tasks
+    asyncio.create_task(helius_stream_task())
+    asyncio.create_task(start_metrics_flusher())
+
+    try:
+        while not _shutdown_event.is_set():
+            await conductor.tick({})
+            await asyncio.sleep(args.delay)
+    finally:
+        notify_discord("Oblivion **stopped**", DiscordEmoji.RED_CIRCLE)
+
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(_go())
-    finally:
-        notify_discord("🔴 Oblivion stopped by operator")  # ✅ Always sends on exit
+    asyncio.run(_main())
