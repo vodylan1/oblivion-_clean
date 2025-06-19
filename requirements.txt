@@ -15,11 +15,6 @@ numpy==1.26.4
 torch==2.2.2+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
 
-# … existing lines …
-
-PyYAML==6.0.1          # YAML loader for atomic_arb params
-
-PyYAML==6.0.2
-PyYAML==6.0.2
+# ── util ────────────────────────────────────────────────
+PyYAML==6.0.2           # YAML loader for atomic_arb params
 backoff==2.2.1
-solana==0.29.0
