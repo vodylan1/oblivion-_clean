@@ -7,9 +7,10 @@ after KeyboardInterrupt when the loop is closed (sync fallback).
 """
 
 from __future__ import annotations
-import os, asyncio, textwrap, json, ssl, urllib.request
+import asyncio, textwrap, json, ssl, urllib.request
 
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+# ✅ Hardcoded webhook for reliability
+WEBHOOK_URL = "https://discordapp.com/api/webhooks/1380654948697636875/MjsfLwtBjUCm6G7JNgdVnl9QcjL7wYnvWS_Fjj57NqBXkD-UAEO8XgxDwBXfM3oIS8V-"
 
 
 async def _post_async(msg: str) -> None:
