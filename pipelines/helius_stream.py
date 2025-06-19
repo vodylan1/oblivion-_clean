@@ -85,3 +85,16 @@ async def helius_stream_task() -> None:
 # Helper used by scripts/run_live.py ---------------------------------------- #
 def launch_helius_stream(loop: asyncio.AbstractEventLoop) -> None:
     loop.create_task(helius_stream_task())
+
+
+# --------------------------------------------------------------------------- #
+# awaited by core.synergy_conductor.conductor
+async def get_next_tick(timeout: float | None = None) -> dict | None:
+    """
+    Async read of the inbound Helius queue.
+    Returns None on timeout so the caller can keep its own loop cadence.
+    """
+    try:
+        return await asyncio.wait_for(helius_queue.get(), timeout)
+    except asyncio.TimeoutError:
+        return None
