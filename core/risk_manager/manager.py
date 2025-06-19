@@ -51,3 +51,7 @@ class RiskManager:
     async def assess_and_maybe_fire(self, sig) -> None:  # noqa: ANN001
         if self.accept(sig):
             print("[risk_mgr] would execute:", sig)
+
+    # ---------------- TEMPORARY override for Phase 11-a -------------------
+    def capital_tier(self) -> int:
+        return 0  # ← temporarily disable tier gating for
