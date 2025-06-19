@@ -6,7 +6,7 @@ from __future__ import annotations
 import os, asyncio, textwrap, aiohttp
 
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL") or (
-    "https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKlMn"  # <‑‑ put real URL here or keep env‑var
+    "https://discordapp.com/api/webhooks/1380654948697636875/MjsfLwtBjUCm6G7JNgdVnl9QcjL7wYnvWS_Fjj57NqBXkD-UAEO8XgxDwBXfM3oIS8V-"  # <‑‑ put real URL here or keep env‑var
 )
 
 async def _post_async(msg: str) -> None:
