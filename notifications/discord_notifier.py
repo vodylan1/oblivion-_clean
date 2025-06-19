@@ -5,6 +5,7 @@ notify_discord("text")  →  posts to the webhook if set.
 Works both inside a running event‑loop (async) and
 after KeyboardInterrupt when the loop is closed (sync fallback).
 """
+
 from __future__ import annotations
 import os, asyncio, textwrap, json, ssl, urllib.request
 
