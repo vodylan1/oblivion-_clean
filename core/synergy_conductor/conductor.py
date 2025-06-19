@@ -8,10 +8,12 @@ from typing import Dict, List, Optional, Tuple
 
 from agents import Agent, TradeSignal
 from core.risk_manager.manager import RiskManager
-from strategies import load as load_strategy
+from strategies import STRATEGY_PRIORITY, load as load_strategy  # ✅ updated import
 from pipelines.helius_stream import helius_stream_task, get_next_tick
 
-STRATEGY_PRIORITY = ["atomic_arb", "pepe_momentum", "whale_shadow", "stealth_exec"]
+# ── force heartbeat first even if STRATEGY_PRIORITY was changed elsewhere
+if STRATEGY_PRIORITY[0] != "ping":
+    STRATEGY_PRIORITY.insert(0, "ping")
 
 
 class SynergyConductor:

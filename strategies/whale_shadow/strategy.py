@@ -10,12 +10,15 @@ class Strategy:
         self.risk_mgr = RiskManager.instance()
 
     async def decide(self, mkt_tick):
+        # if self.risk_mgr.capital_tier() < 5:
+        #     raise ValueError(5)
+
         flow = mkt_tick.get("whale_flow_usd", 0.)
         zscore = mkt_tick.get("price_z", 0.)
         tier = self.risk_mgr.capital_tier()
 
         if flow >= PARAMS["min_flow"][tier] and zscore >= PARAMS["min_z"]:
-            size = min(flow * 0.25, self.risk_mgr.position_limit_usd()*0.08)
+            size = min(flow * 0.25, self.risk_mgr.position_limit_usd() * 0.08)
             return TradeSignal(
                 action="FOLLOW_WHALE",
                 token=mkt_tick["token"],

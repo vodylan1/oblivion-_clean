@@ -6,20 +6,19 @@ from core.risk_manager.manager import RiskManager
 PARAMS = yaml.safe_load((pathlib.Path("config") / "arb_params.yaml").read_text())
 
 class Strategy:
-    """Cross‑DEX atomic arbitrage using Jito bundle‑simulation.
-
-    Implementation here is *minimal*: it only emits a TradeSignal object when
-    a price‑spread mock function exceeds the tier threshold.
-    """
+    """Cross‑DEX atomic arbitrage using Jito bundle‑simulation."""
 
     def __init__(self):
         self.risk_mgr = RiskManager.instance()
-        self.last_ts = 0.0            # simple throttle
+        self.last_ts = 0.0
 
     async def decide(self, mkt_tick) -> TradeSignal | None:
+        # if self.risk_mgr.capital_tier() < 5:
+        #     raise ValueError(5)
+
         tier = self.risk_mgr.capital_tier()
         thresh = PARAMS["tier_threshold"][tier]
-        spread = mkt_tick.get("mock_spread_bps", 0)        # produced by tests
+        spread = mkt_tick.get("mock_spread_bps", 0)
 
         if spread > thresh and time.time() - self.last_ts > 0.25:
             self.last_ts = time.time()

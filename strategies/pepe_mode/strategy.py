@@ -6,15 +6,15 @@ from core.risk_manager.manager import RiskManager
 PARAMS = yaml.safe_load((pathlib.Path("config") / "pepe_params.yaml").read_text())
 
 class Strategy:
-    """
-    Narrative momentum tail strategy.
-    Minimal skeleton: checks a synthetic 'momentum_score' provided in tick.
-    """
+    """Narrative momentum tail strategy."""
 
     def __init__(self):
         self.risk_mgr = RiskManager.instance()
 
     async def decide(self, mkt_tick) -> TradeSignal | None:
+        # if self.risk_mgr.capital_tier() < 5:
+        #     raise ValueError(5)
+
         score = mkt_tick.get("momentum_score", 0.0)
         tier = self.risk_mgr.capital_tier()
         theta = PARAMS["theta"][tier]
