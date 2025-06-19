@@ -1,39 +1,39 @@
-"""
-Fire‑and‑forget Discord notifier usable during runtime **and** on shutdown.
-"""
-
+# notifications/discord_notifier.py
 from __future__ import annotations
-import os, asyncio, textwrap, aiohttp
+import os, asyncio, textwrap, aiohttp, sys
 
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL") or (
-    "https://discordapp.com/api/webhooks/1380654948697636875/MjsfLwtBjUCm6G7JNgdVnl9QcjL7wYnvWS_Fjj57NqBXkD-UAEO8XgxDwBXfM3oIS8V-"  # <‑‑ put real URL here or keep env‑var
-)
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")  # keep secrets out of git
 
-async def _post_async(msg: str) -> None:
-    """Single async HTTP POST via aiohttp."""
-    content = textwrap.shorten(msg, width=1900, placeholder=" …")
+
+async def _post(msg: str) -> None:
+    data = {"content": textwrap.shorten(msg, 1900, placeholder=" …")}
     async with aiohttp.ClientSession() as sess:
-        await sess.post(WEBHOOK_URL, json={"content": content}, timeout=4)
+        r = await sess.post(WEBHOOK_URL, json=data, timeout=4)
+        if r.status >= 300:
+            txt = await r.text()
+            print(f"[discord] HTTP {r.status} – {txt}", file=sys.stderr)
+
 
 def notify_discord(msg: str) -> None:
-    """Safe in any context – schedules task if loop alive, else runs one‑shot loop."""
     if not WEBHOOK_URL:
+        print("[discord] WEBHOOK url not set – alert skipped")
         return
 
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        # No running loop → create one just for this post
+        # outside event‑loop → send synchronously
         try:
-            asyncio.run(_post_async(msg))
-        except Exception:
-            pass
+            asyncio.run(_post(msg))
+        except Exception as exc:
+            print(f"[discord] post failed: {exc}", file=sys.stderr)
         return
 
+    # inside live loop
     if loop.is_closed():
         try:
-            asyncio.run(_post_async(msg))
-        except Exception:
-            pass
+            asyncio.run(_post(msg))
+        except Exception as exc:
+            print(f"[discord] post failed: {exc}", file=sys.stderr)
     else:
-        loop.create_task(_post_async(msg))
+        loop.create_task(_post(msg))
