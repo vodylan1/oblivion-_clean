@@ -8,10 +8,10 @@ from typing import Dict, List, Optional, Tuple
 
 from agents import Agent, TradeSignal
 from core.risk_manager.manager import RiskManager
-from strategies import STRATEGY_PRIORITY, load as load_strategy  # ✅ updated import
+from strategies import STRATEGY_PRIORITY, load as load_strategy
 from pipelines.helius_stream import helius_stream_task, get_next_tick
 
-# ── force heartbeat first even if STRATEGY_PRIORITY was changed elsewhere
+# ── ensure PingStrategy is always first
 if STRATEGY_PRIORITY[0] != "ping":
     STRATEGY_PRIORITY.insert(0, "ping")
 
@@ -26,11 +26,9 @@ class SynergyConductor:
         self._weights: Dict[Agent, float]   = {ag: 1.0 for ag in agents}
         self._tick_cnt = 0
 
-    # legacy alias
     async def vote(self, market_tick: dict | None = None) -> TradeSignal | None:
         return await self.tick(market_tick)
 
-    # ------------------------------------------------------------------ #
     async def tick(self, market_tick: dict | None = None) -> TradeSignal | None:
         market_tick = market_tick or {}
 
@@ -74,7 +72,6 @@ class SynergyConductor:
         )
         return sig
 
-    # ------------------------------------------------------------------ #
     async def run_forever(self, delay: float = 0.4) -> None:
         asyncio.create_task(helius_stream_task())
         while True:

@@ -1,64 +1,48 @@
 """
-security/secure_wallet.py
-─────────────────────────
-Phase‑11 bundle signer for Oblivion.
-
-• Signs one or more solders.transaction.Transaction objects.
-• Submits an atomic bundle to Jito Block‑Engine via HTTP POST.
-• Works with the public (token‑less) tier or with a Bearer token when
-  JITO_AUTH is exported.
-
-Dependencies: aiohttp, solders  (already in requirements)
+Jito bundle submitter + local key‑load helper.
+Success / fail counts are recorded by pipelines.jito_metrics.
 """
 
 from __future__ import annotations
+import os, aiohttp, base64, json, pathlib
 
-import os, base64, json, asyncio
-from typing import List
-from aiohttp import ClientSession
+JITO_RELAY = os.getenv("JITO_RELAY", "https://mainnet.block-engine.jito.wtf/api/v1/bundles")
 
-from solders.keypair import Keypair
-from solders.transaction import Transaction
-
-from .key_store import load_keypair
-from pipelines.jito_metrics import record_ok, record_fail  # ✅ metrics hook
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-JITO_RELAY = os.getenv(
-    "JITO_RELAY",
-    "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
-).rstrip("/")
-
-JITO_AUTH = os.getenv("JITO_AUTH")  # optional – leave unset for 1 RPS
-
-
-# ---------------------------------------------------------------------------
-# Core API – sign & submit
-# ---------------------------------------------------------------------------
-
-async def sign_and_send(txs: List[Transaction], wallet_name: str) -> str:
+# ------------------------------------------------------------------ #
+# 🔑 Minimal key‑loader stub – replace with real keystore in phase 12
+def load_keypair(name: str) -> tuple[bytes, str]:
     """
-    Sign each tx with the fee‑payer keypair, submit as bundle, return base‑58
-    signature of the first transaction.
+    Returns (private_key_bytes, pubkey_base58) for the first stealth wallet.
+    Reads from wallets/stealth_pool.json at repo root.
     """
-    kp: Keypair = load_keypair(wallet_name)
+    pool = pathlib.Path(__file__).resolve().parents[1] / "wallets/stealth_pool.json"
+    data = json.loads(pool.read_text())
+    pk  = data["wallets"][0]["pubkey"]
+    return b"\0" * 64, pk              # zero‑privkey placeholder
 
-    payload = {
-        "transactions": [
-            base64.b64encode(bytes(tx.sign([kp]))).decode() for tx in txs
-        ]
+# ------------------------------------------------------------------ #
+from pipelines.jito_metrics import record_ok, record_fail
+
+
+async def sign_and_send(raw_tx_b64: str) -> None:
+    """
+    Wraps a base64‑encoded raw transaction into a Jito bundle and POSTs it.
+    Counts metrics on every response.
+    """
+    _priv, pubkey = load_keypair("stealth-0")
+
+    bundle = {
+        "transactions": [raw_tx_b64],
+        "simulatedTransactions": [],
+        "leader": None,
+        "rejectionReason": "",           # ignored by relay
+        "referenceBlock": 0,
     }
 
-    headers: dict[str, str] = {}
-    if JITO_AUTH:
-        headers["Authorization"] = f"Bearer {JITO_AUTH}"
+    headers = {"Content-Type": "application/json"}
 
-    async with ClientSession() as sess:
-        resp = await sess.post(JITO_RELAY, json=payload, headers=headers, timeout=3)
-
+    async with aiohttp.ClientSession() as sess:
+        resp = await sess.post(JITO_RELAY, json=bundle, headers=headers, timeout=3)
         if resp.status == 200:
             record_ok()
         else:
@@ -67,25 +51,4 @@ async def sign_and_send(txs: List[Transaction], wallet_name: str) -> str:
                 record_fail(js.get("message", str(resp.status)))
             except Exception:
                 record_fail(str(resp.status))
-
-        resp.raise_for_status()  # still bubble up on error
-        return (await resp.json())["signature"]
-
-
-# Convenience wrapper
-async def send_single(tx: Transaction, wallet_name: str) -> str:
-    return await sign_and_send([tx], wallet_name)
-
-
-# ---------------------------------------------------------------------------
-# Optional simple throttle (≤1 req/s on public tier)
-# ---------------------------------------------------------------------------
-
-_last_ts: float = 0.0
-async def throttle(min_gap_sec: float = 1.05) -> None:
-    global _last_ts
-    now = asyncio.get_event_loop().time()
-    wait = (_last_ts + min_gap_sec) - now
-    if wait > 0:
-        await asyncio.sleep(wait)
-    _last_ts = asyncio.get_event_loop().time()
+        resp.raise_for_status()          # raise after counting
