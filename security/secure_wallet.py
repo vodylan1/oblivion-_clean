@@ -13,24 +13,26 @@ Dependencies: aiohttp, solders  (already in requirements)
 
 from __future__ import annotations
 
-import os, base64, json, asyncio, aiohttp
+import os, base64, json, asyncio
 from typing import List
+from aiohttp import ClientSession
 
 from solders.keypair import Keypair
 from solders.transaction import Transaction
 
-from .key_store import load_keypair          # your existing helper
+from .key_store import load_keypair
+from pipelines.jito_metrics import record_ok, record_fail  # ✅ metrics hook
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-JITO_RELAY = os.getenv(        # override for other regions if desired
+JITO_RELAY = os.getenv(
     "JITO_RELAY",
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
 ).rstrip("/")
 
-JITO_AUTH = os.getenv("JITO_AUTH")            # optional – leave unset for 1 RPS
+JITO_AUTH = os.getenv("JITO_AUTH")  # optional – leave unset for 1 RPS
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +46,7 @@ async def sign_and_send(txs: List[Transaction], wallet_name: str) -> str:
     """
     kp: Keypair = load_keypair(wallet_name)
 
-    # sign + b64 encode
-    bundle = {
+    payload = {
         "transactions": [
             base64.b64encode(bytes(tx.sign([kp]))).decode() for tx in txs
         ]
@@ -55,13 +56,20 @@ async def sign_and_send(txs: List[Transaction], wallet_name: str) -> str:
     if JITO_AUTH:
         headers["Authorization"] = f"Bearer {JITO_AUTH}"
 
-    async with aiohttp.ClientSession() as sess:
-        async with sess.post(JITO_RELAY, json=bundle, headers=headers, timeout=5) as r:
-            body = await r.text()
-            if r.status != 200:
-                raise RuntimeError(f"Jito error {r.status}: {body}")
+    async with ClientSession() as sess:
+        resp = await sess.post(JITO_RELAY, json=payload, headers=headers, timeout=3)
 
-            return json.loads(body)["signature"]
+        if resp.status == 200:
+            record_ok()
+        else:
+            try:
+                js = await resp.json()
+                record_fail(js.get("message", str(resp.status)))
+            except Exception:
+                record_fail(str(resp.status))
+
+        resp.raise_for_status()  # still bubble up on error
+        return (await resp.json())["signature"]
 
 
 # Convenience wrapper

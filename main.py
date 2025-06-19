@@ -1,92 +1,52 @@
 """
-main.py
-Phase 10.1 – top-level script that runs:
-   - background arbitrage loop (xdex_arbitrage_main)
-   - background meme-snipe loop (meme_snipe_main)
-   - optional synergy conductor logic
+Oblivion · Phase 11 bootstrap
+─────────────────────────────
+Creates the global objects and starts the Synergy Conductor event‑loop.
+
+Production wiring
+-----------------
+* RPC / WebSocket URLs come from environment variables for easy override.
+* All “Trump Card” strategies are loaded automatically by the conductor.
+* Legacy agents are optional; feel free to append more.
+
+Unit‑tests import this file only for its top‑level symbols, **do not** start the
+loop when pytest discovers the module.
 """
 
-import asyncio
-import signal
-import sys
-from typing import Dict, Any
+from __future__ import annotations
+import asyncio, os
 
-# background tasks
-from pipelines.xdex_arbitrage import xdex_arbitrage_main
-from pipelines.meme_snipe import meme_snipe_main
-
-# synergy conductor (optional)
-from agents.tywin_agent import TywinAgent
-from agents.wick_agent import WickAgent
 from core.synergy_conductor.conductor import SynergyConductor
+from core.risk_manager.manager import RiskManager
+from agents.tywin_agent import TywinAgent            # example legacy agent
+from agents.hold_agent import HoldAgent              # ultra‑light agent stub
+from pipelines.jito_metrics import start_background  # ✅ Add the flusher
 
-# optional to gather real market_data for synergy logic
-# from pipelines.some_real_feed import get_market_data_stub
+# ── environment -----------------------------------------------------
+RPC_URL           = os.getenv("SOLANA_RPC",  "https://api.mainnet-beta.solana.com")
+WS_URL            = os.getenv("SOLANA_WSS", "wss://api.mainnet-beta.solana.com")
+HELIUS_API_KEY    = os.getenv("HELIUS_API_KEY", "")
+JITO_RELAY_URL    = os.getenv("JITO_RELAY",  "https://frankfurt.mainnet.block-engine.jito.wtf/api/v1/bundles")
 
-_STOP_EVENT = asyncio.Event()
+# ── global singletons ----------------------------------------------
+risk_mgr   = RiskManager.instance()
+agents     = [TywinAgent(), HoldAgent()]
+conductor  = SynergyConductor(agents, risk_mgr=risk_mgr)
+start_background()  # ✅ Launch the 60s metrics telemetry loop
 
-async def background_arbitrage_loop():
-    """Call xdex_arbitrage_main every 5 seconds until stop."""
-    while not _STOP_EVENT.is_set():
-        try:
-            await xdex_arbitrage_main()
-        except Exception as e:
-            print("[arbitrage_loop] Exception:", e)
-        await asyncio.sleep(5)
+# ── live runner -----------------------------------------------------
+async def _run() -> None:
+    """Start websockets + conductor loop."""
+    print("▶ Oblivion Phase 11 booting …")
 
-async def background_meme_snipe_loop():
-    """Call meme_snipe_main every 10 seconds until stop."""
-    while not _STOP_EVENT.is_set():
-        try:
-            await meme_snipe_main()
-        except Exception as e:
-            print("[meme_snipe_loop] Exception:", e)
-        await asyncio.sleep(10)
+    # ‑‑ example: start Helius account‑change stream (non‑blocking) -------
+    if HELIUS_API_KEY:
+        from pipelines.helius_stream import run_helius_stream   # lazy‑import
+        asyncio.create_task(run_helius_stream(HELIUS_API_KEY, WS_URL))
 
-async def synergy_loop(conductor: SynergyConductor):
-    """Optional synergy conductor loop. Could run every 4s or so."""
-    while not _STOP_EVENT.is_set():
-        try:
-            # naive: fetch some real-time data or partial stub
-            # e.g. market_data = get_market_data_stub()
-            market_data: Dict[str, Any] = {}
-            # synergy vote
-            signal = await conductor.vote(market_data)
-            # for demonstration, we just print:
-            print("[synergy_loop] final decision:", signal.action, "conf=", signal.confidence)
-        except Exception as e:
-            print("[synergy_loop] Exception:", e)
-        await asyncio.sleep(4)
+    # ‑‑ conductor forever loop -----------------------------------------
+    await conductor.run_forever(delay=0.35)
 
-async def main():
-    # create synergy conductor if you want to run agent majority logic
-    agents = [TywinAgent(), WickAgent()]
-    conductor = SynergyConductor(agents=agents)
-    
-    # spawn background tasks
-    tasks = []
-    tasks.append(asyncio.create_task(background_arbitrage_loop()))
-    tasks.append(asyncio.create_task(background_meme_snipe_loop()))
-    tasks.append(asyncio.create_task(synergy_loop(conductor)))
 
-    print("[main] Phase 10.1 loops started. Press Ctrl-C to stop.")
-    # wait for a stop signal
-    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-    for t in pending:
-        t.cancel()
-
-def _handle_sigint(sig, frame):
-    print("[main] Received Ctrl-C. Stopping loops…")
-    _STOP_EVENT.set()
-
-if __name__ == "__main__":
-    # handle Ctrl-C
-    signal.signal(signal.SIGINT, _handle_sigint)
-    # handle SIGTERM as well if you want graceful shutdown
-    signal.signal(signal.SIGTERM, _handle_sigint)
-
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        print("[main] Shutting down…")
-        sys.exit(0)
+if __name__ == "__main__":          # make sure pytest doesn’t execute the loop
+    asyncio.run(_run())
