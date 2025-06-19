@@ -37,5 +37,5 @@ async def _go() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(_go())
-    except KeyboardInterrupt:
-        notify_discord("🔴 Oblivion stopped by operator")  # ✅ Shutdown alert
+    finally:
+        notify_discord("🔴 Oblivion stopped by operator")  # ✅ Always sends on exit
