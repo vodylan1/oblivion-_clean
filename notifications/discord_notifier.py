@@ -1,47 +1,25 @@
+# notifications/discord_notifier.py
 """
-discord_notifier.py
-Single responsibility: push plain-text messages to Discord.
-
+Tiny fire‑and‑forget Discord webhook helper.
 Usage:
-    await notify_discord("⭕ trade filled 123 USDC → 4.9 SOL")
+    from notifications.discord_notifier import notify_discord
+    await notify_discord("🚀 Oblivion is live!")
 """
-
 from __future__ import annotations
-import json, os, asyncio
-import aiohttp
-from pathlib import Path
+import os, aiohttp, asyncio, textwrap
 
-# -------------------------------------------------------------------- helpers
-def _load_webhook() -> str | None:
-    # env wins → else config/secrets.json
-    if os.getenv("DISCORD_WEBHOOK"):
-        return os.getenv("DISCORD_WEBHOOK")
-    secrets = Path("config/secrets.json")
-    if secrets.exists():
-        try:
-            data = json.loads(secrets.read_text())
-            return data.get("discord_webhook")
-        except Exception:
-            pass
-    return None
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
+async def _post(msg: str) -> None:
+    if not WEBHOOK_URL:
+        return                                  # silently ignore if unset
+    content = textwrap.shorten(msg, width=1800, placeholder=" …")
+    async with aiohttp.ClientSession() as sess:
+        await sess.post(WEBHOOK_URL, json={"content": content})
 
-_WEBHOOK: str | None = _load_webhook()
-
-# -------------------------------------------------------------------- api
-async def notify_discord(msg: str) -> None:
-    """Fire-and-forget – never raises, logs on failure."""
-    if not _WEBHOOK:
+def notify_discord(msg: str) -> None:
+    """Thread‑safe entry point (creates its own task)."""
+    loop = asyncio.get_event_loop()
+    if loop.is_closed():
         return
-    try:
-        async with aiohttp.ClientSession() as sess:
-            async with sess.post(_WEBHOOK, json={"content": msg}, timeout=5) as r:
-                if r.status not in (200, 204):
-                    print("[discord] HTTP", r.status, await r.text())
-    except Exception as exc:
-        print("[discord] exc:", exc)
-
-
-# tiny self-test
-if __name__ == "__main__":
-    asyncio.run(notify_discord("✅ notifier self-test OK"))
+    loop.create_task(_post(msg))
