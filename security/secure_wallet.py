@@ -3,32 +3,34 @@ security.secure_wallet
 ──────────────────────
 Helpers to build, sign, and submit bundles to Jito Block-Engine.
 
-✓ solders 0.10.x (matches solana-py 0.28)
-✓ base-64-encoded transactions
-✓ `Keypair` alias for legacy callers (`pipelines.jito_submit`)
-✓ POST payload uses **"transactions"** field (v1 API)
+✓ Uses solders 0.10.x (matches solana-py 0.28)
+✓ Encodes transactions as base-64
+✓ Exposes Keypair alias for legacy imports
+✓ Posts with v1 schema  ➜ {"transactions":[…], "simulation":false}
+✓ Prints server payload on HTTP ≥ 400 for quick debugging
 """
 
 from __future__ import annotations
 import os, json, base64, backoff, httpx
 from typing import Sequence, List
 
-# ── solders (crypto primitives) ───────────────────────────
+# solders primitives
 from solders.keypair      import Keypair as SoldersKeypair
 from solders.pubkey       import Pubkey
 from solders.instruction  import Instruction
 from solders.system_program import TransferParams, transfer
 
-# ── solana-py 0.28 (transaction wrapper) ─────────────────
+# solana-py 0.28 container
 from solana.transaction import Transaction, TransactionInstruction
 
 # ----------------------------------------------------------------------
-# Back-compat export: older code may `from security.secure_wallet import Keypair`
+# Back-compat export (legacy modules import Keypair from here)
 # ----------------------------------------------------------------------
 Keypair = SoldersKeypair
 
 # ----------------------------------------------------------------------
-# Config ----------------------------------------------------------------
+# Config
+# ----------------------------------------------------------------------
 JITO_ENDPOINT = os.getenv(
     "JITO_BUNDLE_URL",
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
@@ -44,7 +46,8 @@ TIP_DEST = Pubkey.from_string(
 )
 
 # ----------------------------------------------------------------------
-# Helpers ----------------------------------------------------------------
+# Helper builders
+# ----------------------------------------------------------------------
 def _tip_ix(lamports: int) -> Instruction:
     """Return SystemProgram::Transfer instruction (solders)."""
     params = TransferParams(
@@ -64,6 +67,9 @@ def _build_signed_tx(ixs: Sequence[Instruction]) -> bytes:
     return tx.serialize()
 
 
+# ----------------------------------------------------------------------
+# Network post with back-off and debug dump
+# ----------------------------------------------------------------------
 @backoff.on_exception(
     backoff.expo,
     (httpx.HTTPStatusError,),
@@ -71,36 +77,41 @@ def _build_signed_tx(ixs: Sequence[Instruction]) -> bytes:
     giveup=lambda e: e.response.status_code not in (429,),
 )
 async def _post_bundle(raw_tx: bytes) -> dict:
-    """
-    Send a single-tx bundle.
-
-    Jito v1 expects:
-        { "transactions": ["<base64_tx>"], "simulate": false }
-    """
+    """POST a single-tx bundle to Jito; prints response on HTTP ≥ 400."""
     b64 = base64.b64encode(raw_tx).decode("ascii")
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             JITO_ENDPOINT,
-            json={"transactions": [b64], "simulate": False},
+            json={
+                "transactions": [b64],   # v1 field name
+                "simulation": False,    # run on-chain if True
+            },
             timeout=10,
         )
+
+        if resp.status_code >= 400:      # ← debug aid
+            print("Jito status", resp.status_code, resp.text[:400])
+
         resp.raise_for_status()
         return resp.json()
 
 # ----------------------------------------------------------------------
-# Public API ------------------------------------------------------------
+# Public API (called by strategies / pipelines)
+# ----------------------------------------------------------------------
 async def send_bundle(raw_tx: bytes, _signer: SoldersKeypair, *, tip_lamports=0):
-    """Legacy wrapper — tip is ignored here; handled by caller if needed."""
+    """Legacy shim kept for pipelines.jito_submit; ignores tip."""
     return await _post_bundle(raw_tx)
 
 
 async def sign_and_send(ix_list: List[Instruction], tip_lamports: int = 0):
     """
     Build a Transaction from solders instructions, append optional tip,
-    sign with the module signer, and submit to Jito.
+    sign with module signer, submit to Jito.
     """
     ixs = list(ix_list)
     if tip_lamports:
         ixs.append(_tip_ix(tip_lamports))
+
     raw_tx = _build_signed_tx(ixs)
     return await _post_bundle(raw_tx)
