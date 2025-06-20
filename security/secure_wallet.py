@@ -16,7 +16,13 @@ except ModuleNotFoundError:
     from solana.keypair import Keypair
 
 from solana.rpc.types import TxOpts
-from solana.transaction import Transaction, TransactionInstruction, AccountMeta
+from solana.transaction import Transaction
+try:  # ≥ 0.29
+    from solders.instruction import Instruction as TransactionInstruction
+    from solders.instruction import AccountMeta
+except ModuleNotFoundError:  # fallback for older solana‑py
+    from solana.transaction import TransactionInstruction, AccountMeta
+
 from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 
