@@ -6,20 +6,20 @@ from solders.instruction import Instruction as SoldersIx
 from solana.transaction  import Transaction
 
 from agents                import TradeSignal
-from utils.solana          import transfer_sol_ix
+from utils.solana          import transfer_sol_ix           # real helper
 from security.secure_wallet import send_bundle
 
 log = logging.getLogger(__name__)
 
-# ── signer keypair (JSON array file) ───────────────────────────────────
+# ── signer ──────────────────────────────────────────────────────────────
 KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
 secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
-SIGNER       = Keypair.from_bytes(secret_bytes)
+SIGNER = Keypair.from_bytes(secret_bytes)
 log.info("PingStrategy using signer: %s", SIGNER.pubkey())
 
-# ── constants ─────────────────────────────────────────────────────────
-PING_INTERVAL = 5.0                     # seconds
-DUMMY_TIP     = 1_000                   # lamports (0.000001 SOL)
+# ── config ──────────────────────────────────────────────────────────────
+PING_INTERVAL = 5.0                      # seconds
+DUMMY_TIP     = 1_000                    # lamports (0.000001 SOL)
 TIP_ACCOUNT   = PublicKey.from_string(
     os.getenv("OBLIVION_PING_TIP", "11111111111111111111111111111111")
 )
@@ -31,9 +31,9 @@ TIP_ACCOUNT   = PublicKey.from_string(
 async def _safe_send(raw_tx: bytes):
     await send_bundle(raw_tx, SIGNER, tip_lamports=DUMMY_TIP)
 
-# ── strategy ──────────────────────────────────────────────────────────
+# ── strategy ────────────────────────────────────────────────────────────
 class Strategy:
-    """Heartbeat strategy – every 5 s sends a 1 000-lamport tip bundle."""
+    """Heartbeat – every 5 s sends a dust-transfer bundle."""
 
     def __init__(self):
         self._last = 0.0
@@ -46,16 +46,14 @@ class Strategy:
 
         log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
 
-        # solders Instruction from helper
-        ix_sold: SoldersIx = transfer_sol_ix(
+        ix: SoldersIx = transfer_sol_ix(
             from_pubkey=SIGNER.pubkey(),
             to_pubkey  =TIP_ACCOUNT,
             lamports   =DUMMY_TIP,
         )
 
-        # Build, sign, serialise
         tx = Transaction()
-        tx.add(ix_sold)               # solana-py 0.29 accepts solders Ix
+        tx.add(ix)            # solana-py 0.29 accepts solders Instruction
         tx.sign(SIGNER)
 
         try:
