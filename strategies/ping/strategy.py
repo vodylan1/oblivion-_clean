@@ -2,16 +2,21 @@ from __future__ import annotations
 import time
 import backoff
 
+# Instruction shim
 try:  # ≥ 0.29
     from solders.instruction import Instruction as TransactionInstruction
-except ModuleNotFoundError:  # fallback for ≤ 0.28
+except ModuleNotFoundError:
     from solana.transaction import TransactionInstruction
+
+# PublicKey shim
+try:  # ≥ 0.29
+    from solders.pubkey import Pubkey as PublicKey
+except ModuleNotFoundError:
+    from solana.publickey import PublicKey
 
 from agents import TradeSignal
 from security.secure_wallet import sign_and_send as original_sign_and_send
 # from utils.solana import transfer_sol_ix  # ← disabled for now
-
-from solana.publickey import PublicKey
 
 # temporary stub until utils.solana exists
 def transfer_sol_ix(*_a, **_kw):   # noqa: D401,E501
@@ -43,7 +48,6 @@ class Strategy:
             return None
         self._last = now
 
-        # Send dummy bundle
         try:
             ix = transfer_sol_ix(wallet_pubkey=_tick.wallet, dest_pubkey=TIP_ACCOUNT, lamports=DUMMY_TIP)
             if ix:
