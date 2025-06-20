@@ -1,14 +1,31 @@
-"""
-PingStrategy – submits a 1‑lamport ‘heartbeat’ bundle every 30 s.
-Costs nothing, exercises the full Jito / metrics pipeline.
-"""
 from __future__ import annotations
 import time
+import backoff
+
+try:  # ≥ 0.29
+    from solders.instruction import Instruction as TransactionInstruction
+except ModuleNotFoundError:  # fallback for ≤ 0.28
+    from solana.transaction import TransactionInstruction
+
 from agents import TradeSignal
-from security.secure_wallet import sign_and_send   # counts metrics internally
+from security.secure_wallet import sign_and_send as original_sign_and_send
+from utils.solana import transfer_sol_ix
+from solana.publickey import PublicKey
 
-_PERIOD = 30.0          # faster so you see Discord summary quickly
+# CONFIG
+PING_INTERVAL = 5.0  # seconds
+TIP_ACCOUNT = PublicKey("11111111111111111111111111111111")  # Replace with actual tip address
+DUMMY_TIP = 1_000  # 0.000001 SOL
 
+# BACKOFF WRAPPED SENDER
+@backoff.on_exception(
+    backoff.expo,
+    (Exception,),
+    max_time=30,
+    giveup=lambda e: not hasattr(e, "response") or e.response.status_code not in (429,)
+)
+async def sign_and_send(ix_list: list[TransactionInstruction]):
+    return await original_sign_and_send(ix_list)
 
 class Strategy:
     def __init__(self):
@@ -16,14 +33,13 @@ class Strategy:
 
     async def decide(self, _tick) -> TradeSignal | None:
         now = time.time()
-        if now - self._last < _PERIOD:
+        if now - self._last < PING_INTERVAL:
             return None
         self._last = now
 
-        # Empty payload – Jito replies 200 OK, metrics ⇒ success + 1
-        raw_tx_b64 = ""  # ← minimal heartbeat bundle
         try:
-            await sign_and_send(raw_tx_b64)
+            ix = transfer_sol_ix(wallet_pubkey=_tick.wallet, dest_pubkey=TIP_ACCOUNT, lamports=DUMMY_TIP)
+            await sign_and_send([ix])
         except Exception as exc:
             print("[ping] bundle submit failed:", exc)
 
