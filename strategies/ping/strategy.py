@@ -1,82 +1,59 @@
+"""
+PingStrategy – heartbeat every ≈5 s:
+* builds a 0.000001 SOL transfer to the tip-address (placeholder)
+* signs it and ships to Jito via secure_wallet.sign_and_send()
+"""
+
 from __future__ import annotations
-import time, os, json, logging, backoff
+import asyncio, base64, logging, os, time
 
-# solders + solana (v0.28)
-from solders.keypair     import Keypair       as SoldersKeypair
-from solders.pubkey      import Pubkey        as SoldersPubkey
-from solders.instruction import Instruction   as SoldersIx
-from solana.keypair      import Keypair       as SolanaKeypair
-from solana.transaction  import (
-    Transaction,
-    TransactionInstruction,
-)
-
-# project helpers
-from agents                import TradeSignal
-from utils.solana          import transfer_sol_ix
-from security.secure_wallet import send_bundle
+from solana.rpc.api             import Client
+from solana.transaction         import Transaction
+from solana.keypair             import Keypair
+from solana.system_program      import TransferParams, transfer
+from security.secure_wallet     import SIGNER, sign_and_send
 
 log = logging.getLogger(__name__)
+RPC = Client("https://api.mainnet-beta.solana.com")
 
-# ── load secret, derive signers ───────────────────────────────────────
-KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
-secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
+TIP_ACCOUNT = "11111111111111111111111111111111"   # TODO replace with real
 
-SOLDERS_SIGNER = SoldersKeypair.from_bytes(secret_bytes)     # .pubkey()
-SOLANA_SIGNER  = SolanaKeypair.from_secret_key(secret_bytes) # .public_key
+# --------------------------------------------------------------------------- #
+#  Throttle (public 1 req / s limit)
+# --------------------------------------------------------------------------- #
 
-log.info("PingStrategy using signer: %s", SOLDERS_SIGNER.pubkey())
+_last_sent: float = 0.0
 
-# ── constants ─────────────────────────────────────────────────────────
-PING_INTERVAL = 5.0                      # seconds
-DUMMY_TIP     = 1_000                    # lamports (0.000001 SOL)
-TIP_ACCOUNT   = os.getenv(
-    "OBLIVION_PING_TIP",
-    "11111111111111111111111111111111"
-)  # base-58 string
 
-# ── back-off wrapper around bundle posting ────────────────────────────
-@backoff.on_exception(
-    backoff.expo, (Exception,), max_time=30,
-    giveup=lambda e: getattr(e, "status_code", 0) not in (429,),
-)
-async def _safe_send(raw_tx: bytes):
-    await send_bundle(raw_tx, SOLDERS_SIGNER, tip_lamports=DUMMY_TIP)
+class Strategy:       # loaded by SynergyConductor
+    name = "ping"
 
-# ── heartbeat strategy ────────────────────────────────────────────────
-class Strategy:
-    """Every 5 s: send a 1 000-lamport SystemProgram::Transfer bundle."""
+    def tick(self) -> None:
+        global _last_sent
 
-    def __init__(self):
-        self._last = 0.0
-
-    async def decide(self, _tick) -> TradeSignal | None:
         now = time.time()
-        if now - self._last < PING_INTERVAL:
-            return None
-        self._last = now
-
-        log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
-
-        # build solders instruction
-        ix_sold: SoldersIx = transfer_sol_ix(
-            from_pubkey=SOLDERS_SIGNER.pubkey(),
-            to_pubkey  =SoldersPubkey.from_string(TIP_ACCOUNT),  # ← typo fixed
-            lamports   =DUMMY_TIP,
-        )
-
-        # convert to solana-py instruction
-        ix = TransactionInstruction.from_solders(ix_sold)
-
-        # wrap, sign, submit
-        tx = Transaction()
-        tx.add(ix)
-        tx.sign(SOLANA_SIGNER)
+        if now - _last_sent < 1.05:           # stay under 1 req / s
+            return
+        _last_sent = now
 
         try:
-            await _safe_send(tx.serialize())
-            log.info("[ping] bundle sent OK")
-        except Exception as exc:
-            log.warning("[ping] bundle submit failed: %s", exc)
+            recent = RPC.get_latest_blockhash()["result"]["value"]["blockhash"]
+            ix = transfer(
+                TransferParams(
+                    from_pubkey=SIGNER.pubkey(),
+                    to_pubkey=TIP_ACCOUNT,
+                    lamports=1_000,          # 0.000001 SOL
+                )
+            )
+            tx = Transaction(recent_blockhash=recent, fee_payer=SIGNER.pubkey())
+            tx.add(ix)
+            tx.sign(SIGNER)
 
-        return TradeSignal(action="HOLD", confidence=0.01, meta={"src": "ping"})
+            # encode   -------------------------------------------------------
+            b64_tx = base64.b64encode(bytes(tx)).decode()
+            log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
+            resp = sign_and_send(tx, reference="ping-hb")
+            log.info("[ping] bundle accepted: %s", resp)
+
+        except Exception as exc:              # noqa: BLE001
+            log.warning("[ping] bundle submit failed: %s", exc)
