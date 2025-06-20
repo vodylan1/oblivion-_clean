@@ -1,114 +1,102 @@
 """
-PingStrategy -- minimal heartbeat that sends a 0.000001 SOL transfer
-inside a Jito bundle every ≈1 second.  Pure solana-py (v0.28) only;
-no solders API calls in this module.
+Heartbeat strategy – every ~5 s it builds a 0.000001 SOL transfer
+(from the bot wallet to TIP_ACCOUNT) and sends it as a single-tx bundle.
 
-Prerequisites
--------------
-• ENV  OBLIVION_KEYPAIR   → path to 64-byte JSON array keypair file
-• ENV  HELIUS_HTTP        → HTTPS RPC endpoint (defaults to public Helius)
-• ENV  JITO_BUNDLE_URL    → https://mainnet.block-engine.jito.wtf/api/v1/bundles
+Requirements
+------------
+* solana-py 0.28
+* security.secure_wallet with send_bundle() accepting 200 / 202
 """
 
 from __future__ import annotations
 
-import asyncio
 import base64
-import json
+import asyncio
 import logging
 import os
-import pathlib
 import time
-from typing import Any, List
+from datetime import datetime, timezone
 
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
-from solana.rpc.async_api import AsyncClient
-from solana.system_program import TransferParams, transfer
 from solana.transaction import Transaction
+from solana.system_program import TransferParams, transfer
 
-from security.secure_wallet import send_bundle
+from security.secure_wallet import (
+    send_bundle,
+    load_keypair,
+    get_latest_blockhash,
+)
 
-LAMPORTS_PER_SOL = 1_000_000_000
-TIP_ACCOUNT = PublicKey("11111111111111111111111111111111")  # <-- replace!
+_LOG = logging.getLogger(__name__)
 
-_HELIUS_HTTP = os.getenv("HELIUS_HTTP", "https://api.mainnet.helius-rpc.com")
-_RPC = AsyncClient(_HELIUS_HTTP, timeout=4)
+# --------------------------------------------------------------------------- #
+# constants / config
+# --------------------------------------------------------------------------- #
 
-_log = logging.getLogger(__name__)
+KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
+SIGNER: Keypair = load_keypair(KEYFILE)
 
+TIP_ACCOUNT = PublicKey.from_string(
+    "11111111111111111111111111111111"
+)  # TODO: put real tip wallet here
 
-# ----------------------------------------------------------------------
-# Helpers
-# ----------------------------------------------------------------------
+LAMPORTS = 1_000  # 0.000001 SOL
 
+TICK_SECONDS = 5
+_last_sent = 0.0  # global throttle
 
-def _load_keypair(path: str | os.PathLike[str]) -> Keypair:
-    """Read a Solana CLI JSON keypair (64-byte array) and return Keypair."""
-    arr: List[int]
-    with open(path, encoding="utf-8") as f:
-        arr = json.load(f)
-    if not isinstance(arr, list) or len(arr) != 64:
-        raise ValueError("invalid keypair JSON (need 64 ints)")
-    return Keypair.from_secret_key(bytes(arr))
-
-
-# ----------------------------------------------------------------------
-# Strategy object expected by SynergyConductor
-# ----------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# strategy class expected by SynergyConductor
+# --------------------------------------------------------------------------- #
 
 
 class Strategy:
-    def __init__(self) -> None:
-        keyfile = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
-        if not pathlib.Path(keyfile).exists():
-            raise FileNotFoundError(
-                f"Keypair file '{keyfile}' not found -- set OBLIVION_KEYPAIR env"
-            )
+    name = "ping"
 
-        self.signer: Keypair = _load_keypair(keyfile)
-        self.fee_payer: PublicKey = self.signer.public_key
-        self._last_sent: float = 0.0  # throttle 1 req/s
+    # ---------- SynergyConductor calls this every scheduler tick ----------
+    async def decide(self, *_a, **_kw):
+        global _last_sent
 
-        _log.info("PingStrategy using signer: %s", self.fee_payer)
+        now = time.time()
+        if now - _last_sent < TICK_SECONDS:
+            return None  # throttle
 
-    # SynergyConductor calls `.decide()` each tick; we throttle internally.
-    async def decide(self, *_a: Any, **_kw: Any) -> None:
-        if time.time() - self._last_sent < 1.05:
-            return  # 1 req/s public limit
-        self._last_sent = time.time()
-        await self._heartbeat()
+        _last_sent = now
+        await _send_heartbeat()
+        return None  # conductor expects None / bundle-id / etc.
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
 
-    async def _heartbeat(self) -> None:
-        try:
-            bh_resp = await _RPC.get_latest_blockhash()
-            blockhash = str(bh_resp.value.blockhash)  # Hash → str
+# --------------------------------------------------------------------------- #
+# helpers
+# --------------------------------------------------------------------------- #
 
-            tx = self._build_tx(blockhash)
-            b64_tx = base64.b64encode(tx.serialize()).decode()
 
-            ok = send_bundle([b64_tx])  # secure_wallet handles JSON-RPC POST
-            if ok:
-                _log.info("✅ ping bundle accepted by Jito")
-            else:
-                _log.warning("❌ ping bundle rejected (see logs above)")
-        except Exception as exc:  # broad catch so the loop never crashes
-            _log.warning("[ping] bundle submit failed: %s", exc)
-
-    def _build_tx(self, recent_blockhash: str) -> Transaction:
-        """Create, sign, and return a SystemProgram.transfer transaction."""
-        ix = transfer(
-            TransferParams(
-                from_pubkey=self.fee_payer,
-                to_pubkey=TIP_ACCOUNT,
-                lamports=1_000,  # 0.000001 SOL
-            )
+async def _send_heartbeat() -> None:
+    """Build + sign a tiny transfer and post it to Jito."""
+    # 1) instruction
+    ix = transfer(
+        TransferParams(
+            from_pubkey=SIGNER.public_key,
+            to_pubkey=TIP_ACCOUNT,
+            lamports=LAMPORTS,
         )
-        tx = Transaction(recent_blockhash=recent_blockhash, fee_payer=self.fee_payer)
-        tx.add(ix)
-        tx.sign(self.signer)
-        return tx
+    )
+
+    # 2) fresh blockhash
+    recent = get_latest_blockhash()
+
+    # 3) transaction
+    tx = Transaction(recent_blockhash=recent, fee_payer=SIGNER.public_key)
+    tx.add(ix)
+    tx.sign(SIGNER)
+
+    # 4) serialize → base64
+    b64_tx = base64.b64encode(tx.serialize()).decode()
+
+    # 5) POST bundle (no simulation flag here – live net)
+    try:
+        send_bundle([b64_tx])
+        _LOG.info("ping tick ➜ %s", datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    except Exception as exc:
+        _LOG.warning("[ping] bundle submit failed: %s", exc)
