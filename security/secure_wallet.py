@@ -1,34 +1,33 @@
 """
 security.secure_wallet
 ──────────────────────
-Build, sign, and POST searcher bundles to Jito Block-Engine (mainnet).
+Build, sign, and post bundles to Jito Block-Engine (mainnet).
 
-Key points
-----------
-* solana-py 0.28  + solders 0.10.x
-* Bundles encoded **base-64**
-* JSON-RPC 2.0 envelope  ➜  method = "sendBundle"
-* Debug print dumps response body on HTTP ≥ 400
-* `Keypair` alias exported for legacy callers
+• solana-py 0.28 + solders 0.10.x
+• Base-64 transactions
+• JSON-RPC 2.0   method = "sendBundle"
+• params **array**  ➜ [ { "transactions":[…], "simulation":false } ]
+• Debug print dumps body on HTTP ≥ 400
+• `Keypair` alias retained for legacy calls
 """
 
 from __future__ import annotations
 import os, json, base64, backoff, httpx
 from typing import Sequence, List
 
-# ── solders primitives ────────────────────────────────────────────────
+# —— cryptography ———————————————————————————
 from solders.keypair      import Keypair as SoldersKeypair
 from solders.pubkey       import Pubkey
 from solders.instruction  import Instruction
 from solders.system_program import TransferParams, transfer
 
-# ── solana-py 0.28 wrapper for Transaction ────────────────────────────
-from solana.transaction   import Transaction, TransactionInstruction
+# —— solana-py transaction wrapper ——————————
+from solana.transaction import Transaction, TransactionInstruction
 
 # ----------------------------------------------------------------------
-# Back-compat export
+# Back-compat symbol
 # ----------------------------------------------------------------------
-Keypair = SoldersKeypair  # legacy: pipelines.jito_submit expects this symbol
+Keypair = SoldersKeypair     # for pipelines.jito_submit
 
 # ----------------------------------------------------------------------
 # Config
@@ -48,7 +47,7 @@ TIP_DEST = Pubkey.from_string(
 )
 
 # ----------------------------------------------------------------------
-# Helper builders
+# Helpers
 # ----------------------------------------------------------------------
 def _tip_ix(lamports: int) -> Instruction:
     params = TransferParams(
@@ -67,7 +66,7 @@ def _build_signed_tx(ixs: Sequence[Instruction]) -> bytes:
     return tx.serialize()
 
 # ----------------------------------------------------------------------
-# Network POST with back-off + debug dump
+# Network POST
 # ----------------------------------------------------------------------
 @backoff.on_exception(
     backoff.expo,
@@ -82,10 +81,12 @@ async def _post_bundle(raw_tx: bytes) -> dict:
         "jsonrpc": "2.0",
         "id":       1,
         "method":   "sendBundle",
-        "params": {
-            "transactions": [b64],
-            "simulation":   False,
-        },
+        "params": [
+            {
+                "transactions": [b64],
+                "simulation":   False,
+            }
+        ],
     }
 
     async with httpx.AsyncClient() as client:
@@ -98,17 +99,17 @@ async def _post_bundle(raw_tx: bytes) -> dict:
         return resp.json()
 
 # ----------------------------------------------------------------------
-# Public API
+# Public façade
 # ----------------------------------------------------------------------
 async def send_bundle(raw_tx: bytes, _signer: SoldersKeypair, *, tip_lamports=0):
-    """Legacy wrapper (tip ignored)."""
+    """Legacy helper preserved for pipelines.jito_submit."""
     return await _post_bundle(raw_tx)
 
 
 async def sign_and_send(ix_list: List[Instruction], tip_lamports: int = 0):
     """
-    Build a Transaction from solders instructions, append optional tip,
-    sign with module signer, submit to Jito.
+    Compose a signed Transaction from solders instructions, append tip,
+    and submit to Jito.
     """
     ixs = list(ix_list)
     if tip_lamports:
