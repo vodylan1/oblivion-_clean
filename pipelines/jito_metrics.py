@@ -1,39 +1,48 @@
 """
-Central metrics buffer for Jito bundle outcomes.
-`record_ok()`            – call on HTTP 200
-`record_fail(reason)`    – call on any non‑200
-`start_background()`     – kicks off 60‑s flush loop
+Flush bundle success/fail counters to Discord every 30 s.
 """
 
-from __future__ import annotations
-import asyncio, collections, time
+import asyncio, os
 from notifications.discord_notifier import notify_discord
+from pipelines.jito_submit import metrics
 
-_OK:   int                           = 0
-_FAIL: collections.Counter[str]      = collections.Counter()
+# ----------------------------------------------------------------------
+# public helper for main.py
+# ----------------------------------------------------------------------
 
-async def _flusher(period: int = 60):
-    global _OK, _FAIL
+_flusher_task: asyncio.Task | None = None
+
+def start_background(loop: asyncio.AbstractEventLoop | None = None) -> None:
+    """
+    Launch the period‑flush coroutine exactly once.
+    Called by main.py at import‑time.
+    """
+    global _flusher_task
+    if _flusher_task and not _flusher_task.done():
+        return  # already running
+
+    loop = loop or asyncio.get_event_loop()
+    _flusher_task = loop.create_task(_flusher())
+
+# ----------------------------------------------------------------------
+
+_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
+_INTERVAL = 30
+
+async def _flusher():
     while True:
-        await asyncio.sleep(period)
-        if not (_OK or _FAIL):
-            continue
+        ok, bad = metrics()
+        if ok or bad:
+            colour = 0x2ecc71 if ok else 0xe67e22
+            await notify_discord(
+                f"**Jito bundles** – ok {ok} / fail {bad}",
+                colour=colour,
+            )
+        await asyncio.sleep(_INTERVAL)
 
-        lines = [f"📦 Jito bundles – last {period}s"]
-        if _OK:
-            lines.append(f"   ✅ success : {_OK}")
-        for k, v in _FAIL.items():
-            lines.append(f"   ❌ {k} : {v}")
+_task: asyncio.Task | None = None
 
-        notify_discord("\n".join(lines))
-        _OK, _FAIL = 0, collections.Counter()
-
-def record_ok() -> None:
-    global _OK
-    _OK += 1
-
-def record_fail(reason: str) -> None:
-    _FAIL[reason] += 1
-
-def start_background(loop: asyncio.AbstractEventLoop | None = None):
-    (loop or asyncio.get_event_loop()).create_task(_flusher())
+def ensure_running(loop: asyncio.AbstractEventLoop):
+    global _task
+    if _task is None:
+        _task = loop.create_task(_flusher())
