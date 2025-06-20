@@ -90,4 +90,38 @@ def _post_bundle(body: dict) -> dict:
     """Low-level POST wrapper with back-off."""
     with _jito_client() as client:
         r = client.post(JITO_BUNDLES_URL, json=body)
-        if r.status_code != 200_
+        if r.status_code != 200:                # ← fixed literal
+            print(f"Jito status {r.status_code}", r.text)  # dbg
+        r.raise_for_status()
+        return r.json()
+
+
+def send_bundle(
+    txs_b64: List[str],
+    simulate: bool = False,
+) -> dict:
+    """
+    Submit *one* base-64 tx (or list of them) to Jito.
+
+    Returns the decoded JSON-RPC dict or raises httpx.HTTPStatusError.
+    """
+    body = {
+        "transactions": txs_b64,
+        "simulation": simulate,
+    }
+    return _post_bundle(body)
+
+
+# ---------------------------------------------------------------------------
+#  CLI quick-test
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    b64_tx = build_tip_transfer()
+    print("Built tip tx  :", b64_tx[:60], "...")
+
+    try:
+        out = send_bundle([b64_tx], simulate=True)
+        print("Jito response:", json.dumps(out, indent=2))
+    except Exception as exc:  # noqa: BLE001
+        print("Error sending bundle:", exc)
