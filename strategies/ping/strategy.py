@@ -3,13 +3,13 @@ import time
 import backoff
 
 # Instruction shim
-try:  # ≥ 0.29
+try:
     from solders.instruction import Instruction as TransactionInstruction
 except ModuleNotFoundError:
     from solana.transaction import TransactionInstruction
 
 # PublicKey shim
-try:  # ≥ 0.29
+try:
     from solders.pubkey import Pubkey as PublicKey
 except ModuleNotFoundError:
     from solana.publickey import PublicKey
@@ -24,8 +24,8 @@ def transfer_sol_ix(*_a, **_kw):   # noqa: D401,E501
     return None
 
 # CONFIG
+TIP_ACCOUNT = PublicKey.from_string("11111111111111111111111111111111")  # TODO: replace with real address
 PING_INTERVAL = 5.0  # seconds
-TIP_ACCOUNT = PublicKey("11111111111111111111111111111111")  # Replace with actual tip address
 DUMMY_TIP = 1_000  # 0.000001 SOL
 
 # BACKOFF WRAPPED SENDER
