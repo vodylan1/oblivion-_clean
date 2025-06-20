@@ -1,17 +1,23 @@
 from __future__ import annotations
 import time, os, json, logging, backoff, pathlib
-from solders.keypair     import Keypair
-from solders.pubkey      import Pubkey   as PublicKey
-from solders.instruction import Instruction as SoldersIx
-from solana.transaction  import Transaction, TransactionInstruction
 
-from agents               import TradeSignal
-from utils.solana         import transfer_sol_ix
+# ── solders & solana imports ───────────────────────────────────────────
+from solders.keypair     import Keypair
+from solders.pubkey      import Pubkey as PublicKey
+from solders.instruction import Instruction as SoldersIx
+from solana.transaction  import Transaction
+try:                                           # solana-py ≥ 0.29
+    from solana.instruction import Instruction as TransactionInstruction
+except ImportError:                            # ≤ 0.28 fallback
+    from solana.transaction import TransactionInstruction
+
+from agents                import TradeSignal
+from utils.solana          import transfer_sol_ix
 from security.secure_wallet import send_bundle
 
 log = logging.getLogger(__name__)
 
-# ── load signer keypair (JSON array file) ─────────────────────────────
+# ── signer keypair (JSON array file) ───────────────────────────────────
 KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
 secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
 SIGNER       = Keypair.from_bytes(secret_bytes)
@@ -43,25 +49,4 @@ class Strategy:
 
         log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
 
-        # build SystemProgram::Transfer instruction via helper (solders)
-        ix_sold: SoldersIx = transfer_sol_ix(
-            from_pubkey=SIGNER.pubkey(),
-            to_pubkey  =TIP_ACCOUNT,
-            lamports   =DUMMY_TIP,
-        )
-
-        # convert to solana-py instruction
-        ix_py = TransactionInstruction.from_solders(ix_sold)
-
-        # wrap, sign, send
-        tx = Transaction()
-        tx.add(ix_py)
-        tx.sign(SIGNER)
-
-        try:
-            await _safe_send(tx.serialize())           # ← serialize first
-            log.info("[ping] bundle sent OK")
-        except Exception as exc:
-            log.warning("[ping] bundle submit failed: %s", exc)
-
-        return TradeSignal(action="HOLD", confidence=0.01, meta={"src": "ping"})
+        ix_sold: SoldersIx = transfer_sol_i_
