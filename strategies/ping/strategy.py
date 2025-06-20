@@ -1,77 +1,115 @@
 """
-Heartbeat “ping” strategy:
-• every ~5 s builds a 0.000001 SOL tip transfer to a dummy address
-• signs with OBLIVION_KEYPAIR
-• serialises to base64 and sends via security.secure_wallet.send_bundle
-• throttles to ≤ 1 request / second (public BE rate-limit)
+PingStrategy – ultra-light heartbeat that sends a 1 lamport transfer bundle
+to the Jito Block-Engine every ≈1 s (public-limit safe).
+
+Compatible with:
+* solana-py 0.28.x          (pure solana-py, no solders helpers)
+* Jito v1 /api/v1/bundles   (JSON-RPC "sendBundle" method)
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
+import os
 import time
-from typing import Any
+from typing import Final
 
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
-from solana.rpc.api import Client
-from solana.rpc.types import TxOpts
+from solana.rpc.async_api import AsyncClient
+from solana.system_program import SYS_PROGRAM_ID, TransferParams, transfer
 from solana.transaction import Transaction
 
-from security.secure_wallet import send_bundle, _SIGNER  # re-exported Keypair
+from security.secure_wallet import send_bundle
+
+# ---------------------------------------------------------------------------
+# constants / env
+# ---------------------------------------------------------------------------
+
+LAMPORTS_PER_SOL: Final[int] = 1_000_000_000
+
+KEYFILE: Final[str] = os.environ.get("OBLIVION_KEYPAIR", "shredstream-keypair.json")
+RPC_URL: Final[str] = os.environ.get(
+    "SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"
+)
+
+JITO_MIN_INTERVAL: Final[float] = 1.10  # public 1 req / sec limit
+
+# Change to a real recipient later
+TIP_ACCOUNT: Final[PublicKey] = PublicKey("11111111111111111111111111111111")
 
 log = logging.getLogger(__name__)
-RPC = Client("https://api.mainnet-beta.solana.com")
-TIP_ACCOUNT = PublicKey("11111111111111111111111111111111")  # dummy
+
+# ---------------------------------------------------------------------------
+# signer bootstrap
+# ---------------------------------------------------------------------------
 
 
-class Strategy:  # loaded by SynergyConductor
-    RATE_LIMIT_S = 1.1  # >1 s to stay under 1 req/s
+def _load_signer(path: str) -> Keypair:
+    """Load a solana-cli JSON keypair (64-byte array)"""
+    with open(path, "r", encoding="utf-8") as f:
+        secret = bytes(json.load(f))
+    return Keypair.from_secret_key(secret)
 
-    def __init__(self) -> None:
-        if not _SIGNER:
-            raise RuntimeError(
-                "OBLIVION_KEYPAIR env-var missing or file unreadable"
-            )
-        self._signer: Keypair = _SIGNER
-        self._last_sent = 0.0
-        log.info("PingStrategy using signer: %s", self._signer.public_key)
 
-    # -- SynergyConductor will call decide() with *args it ignores -----------
-    async def decide(self, *_a: Any, **_kw: Any) -> None:
-        await self.tick()
+SIGNER: Final[Keypair] = _load_signer(KEYFILE)
+SIGNER_PUB: Final[PublicKey] = SIGNER.public_key
 
-    # ---------------------------------------------------------------------- #
-    async def tick(self) -> None:
-        now = time.time()
-        if now - self._last_sent < self.RATE_LIMIT_S:
-            return  # respect 1 req/s
+log.info("PingStrategy using signer: %s", SIGNER_PUB)
 
-        # 1) fresh blockhash
-        bh_resp = RPC.get_latest_blockhash()
-        blockhash = bh_resp["result"]["value"]["blockhash"]
 
-        # 2) build 1 000 lamport transfer (0.000001 SOL)
-        ix = RPC.request_airdrop(
-            self._signer.public_key, 1_000
-        )  # simple no-fee dummy; replace with transfer_sol_ix for real
+# ---------------------------------------------------------------------------
+# strategy
+# ---------------------------------------------------------------------------
 
-        tx = Transaction(recent_blockhash=blockhash)
-        tx.add(ix["result"])
-        tx.sign(self._signer)
 
-        # 3) → base64
-        b64_tx = base64.b64encode(bytes(tx.serialize())).decode()
+class Strategy:  # the conductor instantiates this class
+    _last_bundle_ts: float = 0.0
 
+    # ------------- conductor entry point ----------------------------------
+
+    async def decide(self, *_a, **_kw) -> None:
+        """Wrapper expected by SynergyConductor."""
         try:
-            send_bundle([b64_tx], simulate=False)
-            log.info("Ping bundle sent OK (%s)", time.strftime("%H:%M:%S"))
-            self._last_sent = now
-        except Exception as exc:  # noqa: BLE001
-            log.warning("[ping] bundle submit failed: %s", exc)
+            await self._tick_impl()
+        except Exception as exc:  # pragma: no cover
+            log.warning("[ping] bundle submit failed: %s", exc, exc_info=False)
 
+    # ------------- internal ------------------------------------------------
 
-# optional: alias for earlier conductor versions
-Strategy.tick = Strategy.decide  # type: ignore[attr-defined]
+    async def _tick_impl(self) -> None:
+        now = time.time()
+        if now - self._last_bundle_ts < JITO_MIN_INTERVAL:
+            return  # respect public 1 rps cap
+
+        # 1️⃣  fetch recent blockhash
+        async with AsyncClient(RPC_URL) as rpc:
+            resp = await rpc.get_latest_blockhash()
+            recent_blockhash: str = resp.value.blockhash
+
+        # 2️⃣  build a 0.000001 SOL system-transfer
+        ix = transfer(
+            TransferParams(
+                from_pubkey=SIGNER_PUB,
+                to_pubkey=TIP_ACCOUNT,
+                lamports=1_000,  # 0.000001 SOL
+            )
+        )
+
+        tx = Transaction(recent_blockhash=recent_blockhash, fee_payer=SIGNER_PUB)
+        tx.add(ix)
+        tx.sign(SIGNER)
+
+        # 3️⃣  Jito expects base64-encoded raw bytes
+        b64_tx = base64.b64encode(bytes(tx)).decode()
+        ref = f"ping-{int(now)}"
+
+        ok = send_bundle([b64_tx], reference=ref, simulate=False)
+        if ok:
+            log.info("[ping] bundle sent OK – %s", ref)
+            self._last_bundle_ts = now
+        else:
+            log.warning("[ping] bundle submit failed (see above)")
