@@ -1,6 +1,6 @@
 """
-PingStrategy – heartbeat every ≈5 s.
-Builds a 0.000001 SOL transfer and sends it to the Jito bundle RPC.
+PingStrategy – heartbeat every ≈5 s.
+Builds a 0.000001 SOL transfer and sends it to the Jito bundle RPC.
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ log = logging.getLogger(__name__)
 RPC = Client("https://api.mainnet-beta.solana.com")
 
 TIP_ACCOUNT   = PublicKey("11111111111111111111111111111111")    # TODO real tip
-PING_LAMPORTS = int(os.getenv("PING_LAMPORTS", "1000"))           # 0.000001 SOL
-THROTTLE_SEC  = 1.05                                              # 1 req/s
+PING_LAMPORTS = int(os.getenv("PING_LAMPORTS", "1000"))           # 0.000001 SOL
+THROTTLE_SEC  = 1.05                                              # 1 req/s
 
 # ------------------------------------------------------------------ #
-# Load the same secret key as Solana Keypair (64‑byte JSON array)
+# Load signer from the same JSON key-file used elsewhere
 # ------------------------------------------------------------------ #
 with open(Path(KEYFILE), "r", encoding="utf-8") as f:
     secret_bytes = bytes(json.load(f))
@@ -46,9 +46,9 @@ class Strategy:                              # loaded by SynergyConductor
         _last_sent = now
 
         try:
-            # 1) recent hash (object API in solana‑py 0.28)
+            # 1) recent hash (cast Hash -> str)
             bh_resp   = RPC.get_latest_blockhash()
-            recent_bh = bh_resp.value.blockhash
+            recent_bh = str(bh_resp.value.blockhash)
 
             # 2) build instruction
             ix = transfer(
