@@ -48,7 +48,7 @@ class Strategy:
 
         async with AsyncClient(RPC_URL) as rpc:
             resp = await rpc.get_latest_blockhash()
-            recent_blockhash: str = str(resp.value.blockhash)  # ← cast here ✅
+            recent_blockhash: str = str(resp.value.blockhash)
 
         ix = transfer(
             TransferParams(
@@ -62,12 +62,12 @@ class Strategy:
         tx.add(ix)
         tx.sign(SIGNER)
 
-        b64_tx = base64.b64encode(bytes(tx)).decode()
-        ref = f"ping-{int(now)}"
+        # ---- the only line that changed ↓ ----------------------------------
+        b64_tx = base64.b64encode(tx.serialize()).decode()
+        # --------------------------------------------------------------------
 
+        ref = f"ping-{int(now)}"
         ok = send_bundle([b64_tx], reference=ref, simulate=False)
         if ok:
             log.info("[ping] bundle sent OK – %s", ref)
             self._last_bundle_ts = now
-        else:
-            log.warning("[ping] bundle submit failed (see above)")
