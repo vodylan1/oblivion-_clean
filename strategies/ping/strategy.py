@@ -1,7 +1,6 @@
 from __future__ import annotations
 import time, os, json, logging, backoff
 from solana.keypair      import Keypair
-from solana.publickey    import PublicKey
 from solana.transaction  import Transaction
 
 from agents                import TradeSignal
@@ -10,16 +9,19 @@ from security.secure_wallet import send_bundle
 
 log = logging.getLogger(__name__)
 
-# ── signer ─────────────────────────────────────────────────────────
+# ── signer ─────────────────────────────────────────────────────────────
 KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
 secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
-SIGNER       = Keypair.from_secret_key(secret_bytes)
+SIGNER = Keypair.from_secret_key(secret_bytes)
 log.info("PingStrategy using signer: %s", SIGNER.public_key)
 
-# ── config ─────────────────────────────────────────────────────────
-PING_INTERVAL = 5.0
-DUMMY_TIP     = 1_000
-TIP_ACCOUNT   = PublicKey("11111111111111111111111111111111")
+# ── config ─────────────────────────────────────────────────────────────
+PING_INTERVAL = 5.0                      # seconds
+DUMMY_TIP     = 1_000                    # lamports (0.000001 SOL)
+TIP_ACCOUNT   = os.getenv(
+    "OBLIVION_PING_TIP",
+    "11111111111111111111111111111111"
+)  # Base58 string
 
 @backoff.on_exception(
     backoff.expo, (Exception,), max_time=30,
@@ -42,8 +44,9 @@ class Strategy:
 
         log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
 
+        # build a solders Instruction via helper, passing Base58 strings
         ix = transfer_sol_ix(
-            from_pubkey=SIGNER.public_key,
+            from_pubkey=str(SIGNER.public_key),
             to_pubkey  =TIP_ACCOUNT,
             lamports   =DUMMY_TIP,
         )
