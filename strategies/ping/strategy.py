@@ -9,8 +9,14 @@ except ModuleNotFoundError:  # fallback for ≤ 0.28
 
 from agents import TradeSignal
 from security.secure_wallet import sign_and_send as original_sign_and_send
-from utils.solana import transfer_sol_ix
+# from utils.solana import transfer_sol_ix  # ← disabled for now
+
 from solana.publickey import PublicKey
+
+# temporary stub until utils.solana exists
+def transfer_sol_ix(*_a, **_kw):   # noqa: D401,E501
+    """Return None – ping strategy disabled until transfer helper available."""
+    return None
 
 # CONFIG
 PING_INTERVAL = 5.0  # seconds
@@ -37,9 +43,11 @@ class Strategy:
             return None
         self._last = now
 
+        # Send dummy bundle
         try:
             ix = transfer_sol_ix(wallet_pubkey=_tick.wallet, dest_pubkey=TIP_ACCOUNT, lamports=DUMMY_TIP)
-            await sign_and_send([ix])
+            if ix:
+                await sign_and_send([ix])
         except Exception as exc:
             print("[ping] bundle submit failed:", exc)
 
