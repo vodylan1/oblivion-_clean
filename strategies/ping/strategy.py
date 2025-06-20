@@ -1,80 +1,138 @@
 """
-PingStrategy – heartbeat every ≈5 s.
-Builds a 0.000001 SOL transfer and sends it to the Jito bundle RPC.
+PingStrategy – tiny heartbeat that tips a dust amount of SOL every N seconds.
+
+Compatible with **solana-py 0.28.x**  (pure Python objects, no solders shim).
 """
 
 from __future__ import annotations
-import json, logging, os, time
+
+import asyncio
+import base64
+import json
+import logging
+import os
+import time
 from pathlib import Path
+from typing import Any, Final, List
 
-from solana.rpc.api        import Client
-from solana.transaction    import Transaction
-from solana.keypair        import Keypair as SolanaKeypair
-from solana.publickey      import PublicKey
+from solana.keypair import Keypair
+from solana.publickey import PublicKey
+from solana.rpc.api import Client
 from solana.system_program import TransferParams, transfer
+from solana.transaction import Transaction
 
-from security.secure_wallet import KEYFILE, sign_and_send
+# --------------------------------------------------------------------------- #
+# constants & one-time globals
+# --------------------------------------------------------------------------- #
 
 log = logging.getLogger(__name__)
-RPC = Client("https://api.mainnet-beta.solana.com")
 
-TIP_ACCOUNT   = PublicKey("11111111111111111111111111111111")    # TODO real tip
-PING_LAMPORTS = int(os.getenv("PING_LAMPORTS", "1000"))           # 0.000001 SOL
-THROTTLE_SEC  = 1.05                                              # 1 req/s
+PING_LAMPORTS: Final[int] = 1_000          # 0.000001 SOL
+THROTTLE_SEC: Final[int] = 1               # 1 request per second (public limit)
+TIP_ACCOUNT: Final[PublicKey] = PublicKey(
+    "11111111111111111111111111111111"
+)
 
-# ------------------------------------------------------------------ #
-# Load signer from the same JSON key-file used elsewhere
-# ------------------------------------------------------------------ #
-with open(Path(KEYFILE), "r", encoding="utf-8") as f:
-    secret_bytes = bytes(json.load(f))
-SOLANA_SIGNER = SolanaKeypair.from_secret_key(secret_bytes)
+JITO_BUNDLE_URL: Final[str] = os.getenv(
+    "JITO_BUNDLE_URL",
+    "https://mainnet.block-engine.jito.wtf/rpc/v1"
+)
 
-_last_sent: float = 0.0
+RPC = Client("https://api.mainnet-beta.solana.com", timeout=5.0)
 
+# -- signer ------------------------------------------------------------------ #
 
-class Strategy:                              # loaded by SynergyConductor
-    name = "ping"
+_KEY_PATH = Path(os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")).expanduser()
 
-    # -------------------------------------------------------------- #
-    # main heartbeat
-    # -------------------------------------------------------------- #
-    def tick(self) -> None:
+def _load_signer() -> Keypair:
+    if not _KEY_PATH.exists():
+        raise FileNotFoundError(f"keypair file not found: {_KEY_PATH}")
+    raw = _KEY_PATH.read_bytes()
+    if raw.startswith(b"["):
+        secret = bytes(json.loads(raw))
+    else:
+        secret = raw
+    return Keypair.from_secret_key(secret)
+
+SOLANA_SIGNER: Final[Keypair] = _load_signer()
+log.info("PingStrategy using signer: %s", SOLANA_SIGNER.public_key)
+
+# --------------------------------------------------------------------------- #
+# helper to POST a bundle via JSON-RPC v1
+# --------------------------------------------------------------------------- #
+
+import httpx   # import here to keep top clean
+
+async def _post_bundle(b64_txs: List[str], reference: str | None = None) -> Any:
+    payload = {
+        "jsonrpc": "2.0",
+        "id":      1,
+        "method":  "send_bundle",
+        "params":  [{
+            "transactions": b64_txs,
+            "simulation":   False,
+            "reference":    reference,
+        }],
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.post(JITO_BUNDLE_URL, json=payload)
+        if r.status_code != 200:
+            log.warning("Jito status %s %s", r.status_code, r.text)
+            r.raise_for_status()
+        return r.json()
+
+# --------------------------------------------------------------------------- #
+# main Strategy object
+# --------------------------------------------------------------------------- #
+
+_last_sent = 0.0                              # global throttle timestamp
+
+class Strategy:
+    """Minimal Strategy interface expected by SynergyConductor."""
+
+    # ---- conductor calls --------------------------------------------------- #
+
+    async def decide(self, *_a, **_kw) -> None:      # noqa: D401,E501
+        """SynergyConductor passes (state, tick_ts) – we ignore for now."""
+        return await self.tick()                     # thin wrapper
+
+    # ----------------------------------------------------------------------- #
+    async def tick(self) -> None:
         global _last_sent
+
         now = time.time()
         if now - _last_sent < THROTTLE_SEC:
-            return                          # respect public Jito limit
+            return
         _last_sent = now
 
         try:
-            # 1) recent hash (cast Hash -> str)
+            # 1) fresh block-hash (string)
             bh_resp   = RPC.get_latest_blockhash()
             recent_bh = str(bh_resp.value.blockhash)
 
-            # 2) build instruction
+            # 2) build transfer ix
             ix = transfer(
                 TransferParams(
-                    from_pubkey=SOLANA_SIGNER.public_key,
-                    to_pubkey=TIP_ACCOUNT,
-                    lamports=PING_LAMPORTS,
+                    from_pubkey = SOLANA_SIGNER.public_key,
+                    to_pubkey   = TIP_ACCOUNT,
+                    lamports    = PING_LAMPORTS,
                 )
             )
 
-            # 3) assemble + sign
-            tx = Transaction(recent_blockhash=recent_bh,
-                             fee_payer=SOLANA_SIGNER.public_key)
+            # 3) assemble & sign tx
+            tx = Transaction(
+                recent_blockhash = recent_bh,
+                fee_payer        = SOLANA_SIGNER.public_key,
+            )
             tx.add(ix)
             tx.sign(SOLANA_SIGNER)
 
-            log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
-            resp = sign_and_send(tx, reference="ping-hb")
+            # 4) base-64 encode for Jito bundle
+            b64_tx = base64.b64encode(tx.serialize()).decode()
+
+            # 5) POST bundle (respect 1 rps public limit via our throttle)
+            resp = await _post_bundle([b64_tx], reference="ping-hb")
             log.info("[ping] bundle accepted: %s", resp)
 
-        except Exception as exc:            # noqa: BLE001
+        except Exception as exc:                        # noqa: BLE001
             log.warning("[ping] bundle submit failed: %s", exc)
-
-    # -------------------------------------------------------------- #
-    # Conductor expects async decide(*args, **kwargs)
-    # -------------------------------------------------------------- #
-    async def decide(self, *args, **kwargs):    # type: ignore[override]
-        self.tick()
-        return None
