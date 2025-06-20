@@ -1,8 +1,11 @@
 """
-Secure wallet & Jito bundle helper
-• loads a Keypair from JSON-array file (path in $OBLIVION_KEYPAIR)
-• signs and base64-encodes a Transaction
-• POSTs the bundle to Jito’s public REST endpoint with robust back-off
+security/secure_wallet.py
+--------------------------------------------------------------------
+Utilities for building / signing Solana transactions **and**
+submitting bundles to Jito Block-Engine (v1 `POST /api/v1/bundles`).
+
+• build_tip_transfer() → str(base-64)        – tiny 0.000001 SOL tip tx
+• send_bundle([b64_tx], simulate=False) → dict(JSON-RPC result or error)
 """
 
 from __future__ import annotations
@@ -15,76 +18,76 @@ from typing import List
 
 import backoff
 import httpx
-from solana.keypair import Keypair  # solana-py 0.28
+from solana.keypair import Keypair          # ← re-export for legacy imports
+
+from solana.rpc.api import Client
+from solana.rpc.types import TxOpts
 from solana.transaction import Transaction
+from solana.system_program import TransferParams, transfer
 
-# ---------------------------------------------------------------------------#
-#  Configuration
-# ---------------------------------------------------------------------------#
+# ---------------------------------------------------------------------------
+#  Environment
+# ---------------------------------------------------------------------------
 
-# Path to JSON array keypair (created with `solana-keygen new -o my.json`)
-KEY_PATH = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
-
-# Jito public block-engine bundle endpoint
-JITO_BUNDLE_URL = os.getenv(
+JITO_BUNDLES_URL: str = os.getenv(
     "JITO_BUNDLE_URL",
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
 )
-
-# ----------------------------------------------------------------------------
-#  Wallet helpers
-# ----------------------------------------------------------------------------
-def _load_keypair(path: str = KEY_PATH) -> Keypair:
-    with open(path, "r", encoding="utf-8") as f:
-        secret = bytes(json.load(f))
-    return Keypair.from_secret_key(secret)
-
-SIGNER: Keypair = _load_keypair()
-
-# ----------------------------------------------------------------------------
-#  Bundle sender
-# ----------------------------------------------------------------------------
-def _jito_post(payload: dict) -> httpx.Response:
-    return httpx.post(
-        JITO_BUNDLE_URL,
-        json=payload,
-        timeout=10.0,
-    )
-
-@backoff.on_exception(
-    backoff.expo, httpx.HTTPStatusError,
-    max_tries=5,
-    giveup=lambda e: e.response.status_code == 400,  # schema / wallet errors – don’t retry
-    jitter=None,
+RPC_HTTP: str = os.getenv(
+    "HELIUS_HTTP",
+    "https://api.mainnet.helius-rpc.com",
 )
-def _safe_send(payload: dict) -> httpx.Response:
-    resp = _jito_post(payload)
-    if resp.status_code == 429:                        # global 1 rps limit
-        raise httpx.HTTPStatusError("429", request=resp.request, response=resp)
-    if resp.status_code >= 400:
-        print("Jito status", resp.status_code, resp.text)
-        resp.raise_for_status()
-    return resp
 
-# public helper used by strategies
-def send_bundle(tx_list: List[str], simulate: bool = False) -> None:
-    """
-    Push a list of base-64 encoded txs to Jito.
-    Jito v1 schema: {'transactions': [...], 'simulation': bool}
-    """
-    if not tx_list:                     # nothing to send
-        return
-    payload = {
-        "transactions": tx_list,
-        "simulation": simulate,
-    }
-    _safe_send(payload)
+SIGNER_KEYPAIR = Keypair.from_secret_key(
+    bytes(json.load(open(os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json"))))
+)
+SIGNER_PUBKEY = SIGNER_KEYPAIR.public_key
 
-# ----------------------------------------------------------------------------
-#  Convenience wrapper for a single Transaction instance
-# ----------------------------------------------------------------------------
-def sign_and_send(tx: Transaction, simulate: bool = False) -> None:
-    tx.recent_blockhash = str(tx.recent_blockhash)  # ensure str for solana-py
-    tx.sign(SIGNER)
-    b64_tx = base64.b64encode(tx.serialize()).decode()
-    send_bundle([b64_tx], simulate=simulate)
+_RPC = Client(RPC_HTTP)
+
+# ---------------------------------------------------------------------------
+#  Helpers
+# ---------------------------------------------------------------------------
+
+
+def _latest_blockhash() -> str:
+    """Return the recent blockhash (str) for tx signing."""
+    resp = _RPC.get_latest_blockhash()
+    return resp["result"]["value"]["blockhash"]
+
+
+def build_tip_transfer(lamports: int = 1_000) -> str:
+    """
+    Build a **signed** System-Program transfer (tip) tx and
+    return it as a base-64 string suitable for Jito.
+    """
+    ix = transfer(
+        TransferParams(
+            from_pubkey=SIGNER_PUBKEY,
+            to_pubkey=SIGNER_PUBKEY,               # self-transfer “tip”
+            lamports=lamports,
+        )
+    )
+    tx = Transaction().add(ix)
+    tx.recent_blockhash = _latest_blockhash()
+    tx.sign(SIGNER_KEYPAIR)
+
+    return base64.b64encode(tx.serialize()).decode()
+
+
+# ---------------------------------------------------------------------------
+#  Bundle submission
+# ---------------------------------------------------------------------------
+
+
+def _jito_client() -> httpx.Client:
+    """Shared sync HTTP client – 10 s total timeout."""
+    return httpx.Client(timeout=10.0, headers={"Content-Type": "application/json"})
+
+
+@backoff.on_exception(backoff.expo, httpx.HTTPError, max_tries=5)
+def _post_bundle(body: dict) -> dict:
+    """Low-level POST wrapper with back-off."""
+    with _jito_client() as client:
+        r = client.post(JITO_BUNDLES_URL, json=body)
+        if r.status_code != 200_
