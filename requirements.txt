@@ -3,13 +3,12 @@ httpx==0.23.3
 requests==2.32.2
 pydantic==1.10.14
 base58==2.1.1
-aiohttp==3.9.5          # for discord_notifier
-pandas==2.2.2           # factor_loader (Py311 wheels)
-pyarrow==15.0.2         # pandas ≥2 needs this wheel
+aiohttp==3.9.5
+pandas==2.2.2
+pyarrow==15.0.2
 
 # ── Solana stack ─────────────────────────────────────────
 solana==0.28.0          # roll back to last solana-py with keypair support
-solders==0.14.4         # explicit pin for compatibility
 
 # ── numeric / ML ─────────────────────────────────────────
 numpy==1.26.4
@@ -17,5 +16,5 @@ torch==2.2.2+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # ── util ────────────────────────────────────────────────
-PyYAML==6.0.2           # YAML loader for atomic_arb params
+PyYAML==6.0.2
 backoff==2.2.1

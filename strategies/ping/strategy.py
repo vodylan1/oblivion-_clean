@@ -2,7 +2,7 @@ from __future__ import annotations
 import time, os, json, logging, backoff
 from solana.keypair      import Keypair
 from solana.publickey    import PublicKey
-from solana.transaction  import Transaction, TransactionInstruction, AccountMeta
+from solana.transaction  import Transaction
 
 from agents                import TradeSignal
 from utils.solana          import transfer_sol_ix
@@ -10,13 +10,13 @@ from security.secure_wallet import send_bundle
 
 log = logging.getLogger(__name__)
 
-# ── signer ─────────────────────────────────────────────────────────────
+# ── signer ─────────────────────────────────────────────────────────
 KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
 secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
 SIGNER       = Keypair.from_secret_key(secret_bytes)
 log.info("PingStrategy using signer: %s", SIGNER.public_key)
 
-# ── config ─────────────────────────────────────────────────────────────
+# ── config ─────────────────────────────────────────────────────────
 PING_INTERVAL = 5.0
 DUMMY_TIP     = 1_000
 TIP_ACCOUNT   = PublicKey("11111111111111111111111111111111")
@@ -42,14 +42,12 @@ class Strategy:
 
         log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
 
-        # build transfer ix (uses utils/solana.transfer_sol_ix)
         ix = transfer_sol_ix(
             from_pubkey=SIGNER.public_key,
             to_pubkey  =TIP_ACCOUNT,
             lamports   =DUMMY_TIP,
         )
 
-        # wrap & send
         tx = Transaction()
         tx.add(ix)
         tx.sign(SIGNER)
