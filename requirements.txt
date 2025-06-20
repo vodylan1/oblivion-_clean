@@ -4,11 +4,12 @@ requests==2.32.2
 pydantic==1.10.14
 base58==2.1.1
 aiohttp==3.9.5          # for discord_notifier
-pandas==2.2.2           # factor_loader  (Py311 wheels)
+pandas==2.2.2           # factor_loader (Py311 wheels)
 pyarrow==15.0.2         # pandas ≥2 needs this wheel
 
 # ── Solana stack ─────────────────────────────────────────
 solana==0.29.0          # pulls solders (Py311 wheel)
+solders==0.14.4         # explicit pin for compatibility
 
 # ── numeric / ML ─────────────────────────────────────────
 numpy==1.26.4
