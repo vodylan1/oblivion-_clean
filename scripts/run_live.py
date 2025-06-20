@@ -11,12 +11,26 @@ python scripts/run_live.py --log-level DEBUG
 
 from __future__ import annotations
 
-import asyncio, argparse, logging, sys, os
+# --------------------------------------------------------------------------- #
+# 0. Add project root to PYTHONPATH so `import main` always works
+# --------------------------------------------------------------------------- #
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.resolve()))
+
+# --------------------------------------------------------------------------- #
+# 1. Standard library imports
+# --------------------------------------------------------------------------- #
+import asyncio
+import argparse
+import logging
+import os
 from importlib import import_module
 from pathlib import Path
 
 # --------------------------------------------------------------------------- #
-# 0. Interpreter sanity‑check
+# 2. Interpreter sanity-check (ensure venv active)
 # --------------------------------------------------------------------------- #
 _VENV_ROOT = Path(__file__).resolve().parent.parent / ".venv"
 if _VENV_ROOT.exists() and _VENV_ROOT.name not in sys.executable:
@@ -27,14 +41,13 @@ if _VENV_ROOT.exists() and _VENV_ROOT.name not in sys.executable:
     sys.exit(1)
 
 # --------------------------------------------------------------------------- #
-# 1. CLI
+# 3. CLI
 # --------------------------------------------------------------------------- #
 p = argparse.ArgumentParser()
 p.add_argument("--skip-bundles", action="store_true", help="Disable Jito bundle submits")
-p.add_argument(
-    "--log-level", default="INFO", help="Root log level (DEBUG, INFO, …)"
-)
+p.add_argument("--log-level", default="INFO", help="Root log level (DEBUG, INFO, …)")
 args = p.parse_args()
+
 logging.basicConfig(
     level=getattr(logging, args.log_level.upper(), logging.INFO),
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -42,18 +55,20 @@ logging.basicConfig(
 )
 
 # --------------------------------------------------------------------------- #
-# 2. Lazy imports (avoid circulars)
+# 4. Lazy imports (avoid circulars)
 # --------------------------------------------------------------------------- #
+# Import `start_background` but keep existing call-site name for minimal diff
+from pipelines.jito_metrics import start_background as start_metrics_flusher
+
 main = import_module("main")  # brings up `conductor`, etc.
 from notifications.discord_notifier import lifecycle_notifier
-from pipelines.jito_metrics import start_metrics_flusher
 
 # honour flag for metrics
 if args.skip_bundles:
     os.environ["OBLIVION_DISABLE_BUNDLES"] = "1"
 
 # --------------------------------------------------------------------------- #
-# 3. Orchestrate
+# 5. Orchestrate
 # --------------------------------------------------------------------------- #
 async def _async_main() -> None:
     # start background metrics loop (runs forever)
