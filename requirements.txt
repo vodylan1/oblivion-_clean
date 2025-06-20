@@ -8,7 +8,7 @@ pandas==2.2.2           # factor_loader (Py311 wheels)
 pyarrow==15.0.2         # pandas ≥2 needs this wheel
 
 # ── Solana stack ─────────────────────────────────────────
-solana==0.29.0          # pulls solders (Py311 wheel)
+solana==0.28.0          # roll back to last solana-py with keypair support
 solders==0.14.4         # explicit pin for compatibility
 
 # ── numeric / ML ─────────────────────────────────────────

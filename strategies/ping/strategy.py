@@ -1,51 +1,35 @@
 from __future__ import annotations
 import time, os, json, logging, backoff
+from solana.keypair      import Keypair
+from solana.publickey    import PublicKey
+from solana.transaction  import Transaction, TransactionInstruction, AccountMeta
 
-# ── solders + solana imports ───────────────────────────────────────────
-from solders.keypair     import Keypair       as SoldersKeypair
-from solders.pubkey      import Pubkey        as SoldersPubkey
-from solders.instruction import Instruction   as SoldersIx
-from solana.keypair      import Keypair       as SolanaKeypair
-from solana.transaction  import Transaction
-
-# ── project helpers ───────────────────────────────────────────────────
 from agents                import TradeSignal
 from utils.solana          import transfer_sol_ix
 from security.secure_wallet import send_bundle
 
 log = logging.getLogger(__name__)
 
-# ── load the 64-byte secret once and derive two keypairs ──────────────
+# ── signer ─────────────────────────────────────────────────────────────
 KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
 secret_bytes = bytes(json.load(open(KEYFILE, "r", encoding="utf-8")))
+SIGNER       = Keypair.from_secret_key(secret_bytes)
+log.info("PingStrategy using signer: %s", SIGNER.public_key)
 
-# solders keypair for instruction-building and bundle auth
-SOLDERS_SIGNER = SoldersKeypair.from_bytes(secret_bytes)
-
-# solana-py keypair for Transaction.sign()
-SOLANA_SIGNER  = SolanaKeypair.from_secret_key(secret_bytes)
-
-log.info("PingStrategy using signer: %s", SOLDERS_SIGNER.pubkey())
-
-# ── constants ─────────────────────────────────────────────────────────
+# ── config ─────────────────────────────────────────────────────────────
 PING_INTERVAL = 5.0
 DUMMY_TIP     = 1_000
-TIP_ACCOUNT   = SoldersPubkey.from_string(
-    os.getenv("OBLIVION_PING_TIP", "11111111111111111111111111111111")
-)
+TIP_ACCOUNT   = PublicKey("11111111111111111111111111111111")
 
-# ── back-off wrapper for Jito bundle submission ────────────────────────
 @backoff.on_exception(
     backoff.expo, (Exception,), max_time=30,
     giveup=lambda e: getattr(e, "status_code", 0) not in (429,),
 )
 async def _safe_send(raw_tx: bytes):
-    # use solders keypair for bundle auth
-    await send_bundle(raw_tx, SOLDERS_SIGNER, tip_lamports=DUMMY_TIP)
+    await send_bundle(raw_tx, SIGNER, tip_lamports=DUMMY_TIP)
 
-# ── heartbeat strategy ─────────────────────────────────────────────────
 class Strategy:
-    """Every 5 s: build & send a 1 000-lamport tip bundle."""
+    """Heartbeat – every 5 s sends a dust-transfer bundle."""
 
     def __init__(self):
         self._last = 0.0
@@ -58,17 +42,17 @@ class Strategy:
 
         log.info("ping tick ➜ %s", time.strftime("%H:%M:%S"))
 
-        # build a solders instruction
-        ix: SoldersIx = transfer_sol_ix(
-            from_pubkey=SOLDERS_SIGNER.pubkey(),
+        # build transfer ix (uses utils/solana.transfer_sol_ix)
+        ix = transfer_sol_ix(
+            from_pubkey=SIGNER.public_key,
             to_pubkey  =TIP_ACCOUNT,
             lamports   =DUMMY_TIP,
         )
 
-        # put it into a solana-py Transaction
+        # wrap & send
         tx = Transaction()
-        tx.add(ix)                      # accepts solders.Instruction
-        tx.sign(SOLANA_SIGNER)          # now a real Solana Keypair
+        tx.add(ix)
+        tx.sign(SIGNER)
 
         try:
             await _safe_send(tx.serialize())
