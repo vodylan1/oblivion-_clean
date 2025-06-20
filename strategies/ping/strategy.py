@@ -62,12 +62,9 @@ class Strategy:
         tx.add(ix)
         tx.sign(SIGNER)
 
-        # ---- the only line that changed ↓ ----------------------------------
         b64_tx = base64.b64encode(tx.serialize()).decode()
-        # --------------------------------------------------------------------
 
-        ref = f"ping-{int(now)}"
-        ok = send_bundle([b64_tx], reference=ref, simulate=False)
+        ok = send_bundle([b64_tx], simulate=False)   # ← reference removed
         if ok:
-            log.info("[ping] bundle sent OK – %s", ref)
+            log.info("[ping] bundle sent OK – %s", int(now))
             self._last_bundle_ts = now
