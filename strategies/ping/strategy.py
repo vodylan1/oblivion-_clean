@@ -1,36 +1,50 @@
 from __future__ import annotations
 import time
 import backoff
+import logging
 
-# ── compatibility shims ────────────────────────────────────────────────
+# ----------------------------------------------------------------------
+# logging
+# ----------------------------------------------------------------------
+log = logging.getLogger(__name__)
+
+# ----------------------------------------------------------------------
+# compatibility shims
+# ----------------------------------------------------------------------
 try:  # solana-py ≥ 0.29
     from solders.instruction import Instruction as TransactionInstruction
-except ModuleNotFoundError:             # solana-py ≤ 0.28
+except ModuleNotFoundError:                        # solana-py ≤ 0.28
     from solana.transaction import TransactionInstruction
 
-try:                                     # solana-py ≥ 0.29
+try:                                               # solana-py ≥ 0.29
     from solders.pubkey import Pubkey as PublicKey
-except ModuleNotFoundError:              # solana-py ≤ 0.28
+except ModuleNotFoundError:                        # solana-py ≤ 0.28
     from solana.publickey import PublicKey
 
-# ── project imports ───────────────────────────────────────────────────
+# ----------------------------------------------------------------------
+# project imports
+# ----------------------------------------------------------------------
 from agents import TradeSignal
 from security.secure_wallet import sign_and_send as original_sign_and_send
 
-# ---------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # transfer helper (stub for now)
-# ---------------------------------------------------------------------
-# Replace with:     from utils.solana import transfer_sol_ix
-def transfer_sol_ix(*_a, **_kw):   # noqa: D401,E501
+# ----------------------------------------------------------------------
+# Replace with:   from utils.solana import transfer_sol_ix
+def transfer_sol_ix(*_a, **_kw):
     """Stub – returns None until utils.solana helper is implemented."""
     return None
 
-# ── config ────────────────────────────────────────────────────────────
-TIP_ACCOUNT = PublicKey.from_string("11111111111111111111111111111111")  # TODO: real addr
-PING_INTERVAL = 5.0            # seconds
-DUMMY_TIP = 1_000              # 0.000001 SOL
+# ----------------------------------------------------------------------
+# config
+# ----------------------------------------------------------------------
+TIP_ACCOUNT   = PublicKey.from_string("11111111111111111111111111111111")  # TODO: real addr
+PING_INTERVAL = 5.0        # seconds
+DUMMY_TIP     = 1_000      # 0.000001 SOL
 
-# ── backoff-wrapped sender ────────────────────────────────────────────
+# ----------------------------------------------------------------------
+# back-off-wrapped sender
+# ----------------------------------------------------------------------
 @backoff.on_exception(
     backoff.expo,
     (Exception,),
@@ -40,9 +54,11 @@ DUMMY_TIP = 1_000              # 0.000001 SOL
 async def sign_and_send(ix_list: list[TransactionInstruction]):
     return await original_sign_and_send(ix_list)
 
-# ── strategy object ───────────────────────────────────────────────────
+# ----------------------------------------------------------------------
+# strategy
+# ----------------------------------------------------------------------
 class Strategy:
-    """Ping (heartbeat) strategy – submits a dust transfer every 5 s."""
+    """Heartbeat strategy: every 5 s log a tick and (optionally) send a dust transfer."""
 
     def __init__(self):
         self._last = 0.0
@@ -53,23 +69,26 @@ class Strategy:
             return None
         self._last = now
 
+        # visible heartbeat in console
+        log.info("ping tick @ %s", time.strftime("%H:%M:%S"))
+
         # --------------------------------------------------------------
         # Build bundle only if helper returns a real Instruction object
         # (stub returns None during early bootstrap)
         # --------------------------------------------------------------
         ix = transfer_sol_ix(
-            wallet_pubkey=getattr(_tick, "wallet", None),   # may be None in stub mode
+            wallet_pubkey=getattr(_tick, "wallet", None),
             dest_pubkey=TIP_ACCOUNT,
             lamports=DUMMY_TIP,
         )
 
-        if ix is None:  # helper not implemented yet → skip quietly
+        if ix is None:      # transfer helper not wired yet
             return TradeSignal(action="HOLD", confidence=0.01,
                                meta={"src": "ping-stub"})
 
         try:
             await sign_and_send([ix])
         except Exception as exc:
-            print("[ping] bundle submit failed:", exc)
+            log.warning("[ping] bundle submit failed: %s", exc)
 
         return TradeSignal(action="HOLD", confidence=0.01, meta={"src": "ping"})
