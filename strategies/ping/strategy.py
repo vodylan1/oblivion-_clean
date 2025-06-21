@@ -1,135 +1,73 @@
 """
-PingStrategy
-------------
-Sends a 1-lamport transfer every ~5 s so Jito can see liveliness and
-priority-fee settings.  Pure *solana-py* (0 .28) – no solders objects.
-
-Environment
------------
-OBLIVION_KEYPAIR   – path to 64-byte JSON array keypair (CLI default)
-HELIUS_HTTP        – optional custom RPC; defaults to Helius mainnet
-JITO_BUNDLE_URL    – https://mainnet.block-engine.jito.wtf/api/v1/bundles
+Heartbeat “Ping” strategy
+─────────────────────────
+Every *period* seconds:
+  • fetch latest block‑hash
+  • create a 1 000‑lamport System Transfer to OBLIVION_PING_TIP
+  • wrap it in a VersionedTransaction v0
+  • post as a single‑tx bundle to Jito
 """
+from __future__ import annotations
 
 import asyncio
-import base64
-import json
+import logging
 import os
-from time import time
-from typing import List, Optional
+from typing import Final, List
 
-import httpx
-from solana.keypair import Keypair
-from solana.publickey import PublicKey
-from solana.rpc.async_api import AsyncClient
-from solana.rpc.commitment import Confirmed
-from solana.rpc.types import TxOpts
-from solana.system_program import TransferParams, transfer
-from solana.transaction import Transaction
+from solders.hash import Hash
+from solders.instruction import Instruction as SoldersIx
 from solders.message import MessageV0
+from solders.pubkey import Pubkey
+from solders.system_program import transfer, TransferParams
+from solders.transaction import VersionedTransaction
+from solana.rpc.async_api import AsyncClient
 
-# ---------------------------------------------------------------------------#
-# Config
-# ---------------------------------------------------------------------------#
-KEYFILE = os.getenv("OBLIVION_KEYPAIR", "shredstream-keypair.json")
+from security.secure_wallet import SIGNER, send_bundle
 
-HELIUS_HTTP = os.getenv(
-    "HELIUS_HTTP",
-    "https://rpc.helius.xyz/?api-key=demo",      # fallback public demo key
+_LOG = logging.getLogger(__name__)
+_RPC_URL: Final[str] = "https://api.mainnet-beta.solana.com"
+_TIP_ACCT: Final[Pubkey] = Pubkey.from_string(
+    os.getenv("OBLIVION_PING_TIP", "11111111111111111111111111111111")
 )
+_LAMPORTS: Final[int] = 1_000
 
-JITO_URL = os.getenv(
-    "JITO_BUNDLE_URL",
-    "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
-)
+class Strategy:                           # class name expected by loader
+    def __init__(self, period: int = 5):
+        self._period = period
+        self._task: asyncio.Task | None = None
 
-PING_INTERVAL = 5          # seconds between heart-beats
-LAMPORTS       = 1_000     # 0.000001 SOL dummy transfer
+    # SynergyConductor calls this once per tick
+    async def decide(self, *_):           # accept *args for forward‑compat
+        if self._task is None:
+            self._task = asyncio.create_task(self._loop())
 
-# ---------------------------------------------------------------------------#
-# Signer
-# ---------------------------------------------------------------------------#
-with open(KEYFILE, "r", encoding="utf-8") as f:
-    secret = bytes(json.load(f))
+    # ────────────────── internal worker ──────────────────
+    async def _loop(self):
+        _LOG.info("PingStrategy signer: %s", SIGNER.pubkey())
+        rpc = AsyncClient(_RPC_URL, commitment="processed")
 
-SIGNER      = Keypair.from_secret_key(secret)
-SIGNER_PK   = SIGNER.public_key
-TIP_ACCOUNT = PublicKey("11111111111111111111111111111111")   # burn addr
+        while True:
+            try:
+                # 1) latest block‑hash
+                bh = Hash.from_string((await rpc.get_latest_blockhash()).value.blockhash)
 
-# ---------------------------------------------------------------------------#
-# Helpers
-# ---------------------------------------------------------------------------#
-async def _get_recent_blockhash(rpc: AsyncClient) -> str:
-    """Return recent blockhash as base-58 string (solana-py 0.28)."""
-    resp = await rpc.get_latest_blockhash()
-    return resp.value.blockhash            # already b58 str in 0.28
+                # 2) system‑transfer instruction
+                ix: SoldersIx = transfer(
+                    TransferParams(
+                        from_pubkey=SIGNER.pubkey(),
+                        to_pubkey=_TIP_ACCT,
+                        lamports=_LAMPORTS,
+                    )
+                )
 
-def _tx_to_b64(tx: Transaction) -> str:
-    """Serialize + base64-encode a solana-py Transaction."""
-    return base64.b64encode(tx.serialize()).decode()
+                # 3) message v0 + tx
+                msg = MessageV0.new(SIGNER.pubkey(), [ix], [], bh)
+                tx  = VersionedTransaction(msg, [SIGNER])
 
-async def _post_bundle(b64_txs: List[str]) -> httpx.Response:
-    """POST bundle to Jito; returns the raw httpx.Response."""
-    async with httpx.AsyncClient(timeout=10) as client:
-        return await client.post(
-            JITO_URL,
-            json={
-                "transactions": b64_txs,
-                "simulation":   False,
-            },
-        )
+                # 4) send
+                bundle_id = await send_bundle([tx])
+                _LOG.info("Ping bundle sent • id=%s", bundle_id)
+            except Exception as exc:
+                _LOG.warning("Ping failed: %s", exc, exc_info=False)
 
-# ---------------------------------------------------------------------------#
-# Strategy
-# ---------------------------------------------------------------------------#
-class Strategy:
-    def __init__(self) -> None:
-        print("[ping] signer:", SIGNER_PK)
-        self._rpc  = AsyncClient(HELIUS_HTTP, commitment=Confirmed)
-        self._next = 0.0                     # next allowed send epoch
-
-    # ------------------------------------------------------------------- #
-    async def tick(self) -> Optional[str]:
-        """Heartbeat – builds → signs → bundles → POSTs a 1-lamport tx."""
-        now = time()
-        if now < self._next:                    # throttle to 1-req/interval
-            return None
-        self._next = now + PING_INTERVAL
-
-        # 1) latest blockhash
-        bh = await _get_recent_blockhash(self._rpc)
-
-        # 2) build transfer
-        ix  = transfer(
-            TransferParams(
-                from_pubkey=SIGNER_PK,
-                to_pubkey  =TIP_ACCOUNT,
-                lamports   =LAMPORTS,
-            )
-        )
-        # --- Hash **must** be str for MessageV0
-        msg = MessageV0.new_with_blockhash([ix], SIGNER_PK, str(bh))  # ← fix
-        tx  = Transaction.populate(msg)
-        tx.sign(SIGNER)
-
-        # 3) bundle → POST
-        r = await _post_bundle([_tx_to_b64(tx)])
-
-        if r.status_code in (200, 202):
-            print("[ping] bundle accepted:", r.status_code)
-            return r.text
-
-        # ---- failure path ---------------------------------------------
-        print("[ping] Jito status", r.status_code)
-        try:
-            print(r.json())
-        except Exception:
-            print(r.text)
-        return None
-
-    # ------------------------------------------------------------------- #
-    # SynergyConductor expects .decide(); just forward to tick()
-    # ------------------------------------------------------------------- #
-    def decide(self, *args, **kwargs):
-        loop = asyncio.get_event_loop()
-        return loop.create_task(self.tick())
+            await asyncio.sleep(self._period)

@@ -1,122 +1,59 @@
 """
-Helpers for signing and submitting bundles to Jito Block-Engine
-(works with solana-py 0.28 and solders 0.10).
-
-Functions
----------
-load_keypair(path)  -> Keypair
-send_bundle(txs_b64: list[str], simulate=False) -> bool
+Light wrapper around Jito’s block‑engine client + Solders keypairs
+------------------------------------------------------------------
+Required env‑vars
+    OBLIVION_KEYPAIR   – absolute path to 64‑byte JSON array
+    JITO_BUNDLE_URL    – https://mainnet.block-engine.jito.wtf/api/v1/bundles
+    OBLIVION_PING_TIP  – tip (lamports) to attach to every bundle, default 0
 """
-
 from __future__ import annotations
 
-import base64
 import json
-import logging
 import os
-import time
 from pathlib import Path
-from typing import List
+from typing import Final, Iterable, List
 
 import backoff
-import httpx
-from solana.keypair import Keypair  # re-exported for pipelines.jito_submit
-from solana.rpc.api import Client
+from jito.rpc import AsyncBlockEngineClient           # 0.1.5
+from solders.keypair import Keypair as SoldersKeypair
+from solders.transaction import VersionedTransaction
 
-# --------------------------------------------------------------------------- #
-# configuration
-# --------------------------------------------------------------------------- #
+# ───────────────────────── helpers ──────────────────────────────────────────
+def _load_keypair(path: str | os.PathLike) -> SoldersKeypair:
+    fp = Path(path).expanduser().resolve()
+    if not fp.is_file():
+        raise FileNotFoundError(f"keypair file not found: {fp}")
+    secret = bytes(json.load(fp.open("r", encoding="utf‑8")))
+    return SoldersKeypair.from_bytes(secret)
 
-_LOG = logging.getLogger(__name__)
+# ───────────────────────── globals ──────────────────────────────────────────
+SIGNER: Final[SoldersKeypair] = _load_keypair(os.environ["OBLIVION_KEYPAIR"])
 
-JITO_URL: str = os.getenv(
+_BE_URL: Final[str] = os.getenv(
     "JITO_BUNDLE_URL",
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
 )
 
-# Public Helius endpoint if the user did not override
-_RPC = Client(os.getenv("HELIUS_HTTP", "https://api.mainnet.helius-rpc.com"))
+_TIP_LAMPORTS: Final[int] = int(os.getenv("OBLIVION_PING_TIP", "0"))
 
-# --------------------------------------------------------------------------- #
-# key management
-# --------------------------------------------------------------------------- #
+_be: Final[AsyncBlockEngineClient] = AsyncBlockEngineClient(_BE_URL)
 
+# ───────────────────────── public API ───────────────────────────────────────
+async def _post_bundle(
+    txs: Iterable[VersionedTransaction], tip: int = _TIP_LAMPORTS
+) -> str:
+    raw: List[bytes] = [tx.serialize() for tx in txs]
+    # jito‑py‑rpc returns the bundle‑id string
+    return await _be.send_bundle(raw, tip=tip)
 
-def load_keypair(path: str | os.PathLike) -> Keypair:
-    """
-    Load a Solana CLI–format keypair (JSON array of 64 numbers).
+# back‑off on transient HTTP 4xx/5xx or rate‑limit
+_send = backoff.on_exception(backoff.expo, Exception, max_tries=5)(_post_bundle)
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to e.g. ``shredstream-keypair.json``
+async def send_bundle(
+    txs: Iterable[VersionedTransaction], tip: int | None = None
+) -> str:
+    """High‑level helper used by strategies."""
+    return await _send(txs, tip=_TIP_LAMPORTS if tip is None else tip)
 
-    Returns
-    -------
-    Keypair
-    """
-    path = Path(path).expanduser().resolve()
-    secret = bytes(json.loads(path.read_text()))
-    return Keypair.from_secret_key(secret)
-
-
-# --------------------------------------------------------------------------- #
-# bundle submission
-# --------------------------------------------------------------------------- #
-
-
-def _body(txs_b64: List[str], simulate: bool) -> dict:
-    return {
-        "transactions": txs_b64,  # <-- Jito v1 key
-        "simulation": simulate,
-    }
-
-
-# Retry on 429 (“Network congested. Endpoint is globally rate limited.”)
-@backoff.on_exception(
-    backoff.expo,
-    httpx.HTTPStatusError,
-    max_tries=5,
-    giveup=lambda e: e.response.status_code in (400, 404),
-)
-def _post_bundle(body: dict) -> httpx.Response:
-    r = httpx.post(JITO_URL, json=body, timeout=5.0)
-    status = r.status_code
-    if status not in (200, 202):
-        # log the raw body for fast debugging (e.g. {"error":"unknown wallet"} )
-        _LOG.warning("Jito status %s %s", status, r.text)
-        r.raise_for_status()  # ⇢ retry or bubble
-    else:
-        _LOG.info("Jito bundle accepted (%s)", status)
-    return r
-
-
-def send_bundle(txs_b64: List[str], simulate: bool = False) -> bool:
-    """
-    Submit one or more **base-64** encoded transactions to Jito.
-
-    Returns True when HTTP layer returned 200 **or** 202.
-    Raises httpx.HTTPStatusError otherwise (already back-off wrapped).
-    """
-    body = _body(txs_b64, simulate)
-    _post_bundle(body)
-    return True
-
-
-# --------------------------------------------------------------------------- #
-# convenience – fetch recent blockhash (8 × per second public limit)
-# --------------------------------------------------------------------------- #
-
-
-def get_latest_blockhash() -> str:
-    """Return a recent blockhash as **base-58 string** (for solana-py Tx)."""
-    resp = _RPC.get_latest_blockhash()
-    # solana-py 0.28: resp["result"]["value"]["blockhash"]
-    return resp["result"]["value"]["blockhash"]
-
-
-# --------------------------------------------------------------------------- #
-# re-export for legacy imports
-# --------------------------------------------------------------------------- #
-
-__all__ = ["Keypair", "load_keypair", "send_bundle", "get_latest_blockhash"]
+# legacy alias so old imports won’t break
+Keypair = SoldersKeypair

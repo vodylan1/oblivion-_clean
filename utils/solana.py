@@ -1,51 +1,37 @@
 """
-Light‑weight Solana helpers that rely only on the solders API
-(compatible with solana‑py >= 0.29).
-
-Currently exposes:
-    • transfer_sol_ix(...)  -> solders.instruction.Instruction
+Grab current block-hash & build a System-Program transfer instruction that
+works with solana-py 0.28 + solders 0.10.
 """
 
-from __future__ import annotations
+import asyncio, httpx
+from typing import Final
+from solana.rpc.types import RPCResponse
+from solana.publickey import PublicKey
+from solana.transaction import TransactionInstruction, AccountMeta
+from solders.instruction import Instruction as SoldersIX
+from solders.message import MessageV0
+from solders.system_program import transfer, TransferParams
 
-from typing import Union
-
-from solders.instruction import Instruction, AccountMeta
-from solders.pubkey import Pubkey
-from solders.system_program import ID as SYSTEM_PROGRAM_ID, TransferParams, transfer
-
-LAMPORTS_PER_SOL: int = 1_000_000_000
-
-
-def _to_pubkey(key: Union[str, Pubkey]) -> Pubkey:
-    """Accept either a base‑58 string or an existing Pubkey."""
-    return key if isinstance(key, Pubkey) else Pubkey.from_string(key)
+_RPC_URL: Final[str] = "https://api.mainnet-beta.solana.com"
 
 
-# --------------------------------------------------------------------------- #
-# PUBLIC HELPERS
-# --------------------------------------------------------------------------- #
-def transfer_sol_ix(
-    from_pubkey: Union[str, Pubkey],
-    to_pubkey: Union[str, Pubkey],
-    lamports: int,
-) -> Instruction:
-    """
-    Build a SystemProgram::Transfer instruction.
+async def _rpc(method: str, params: list) -> RPCResponse:
+    async with httpx.AsyncClient() as cli:
+        r = await cli.post(_RPC_URL, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        r.raise_for_status()
+        return r.json()["result"]
 
-    Args
-    ----
-    from_pubkey : sender pubkey (base‑58 str or Pubkey)
-    to_pubkey   : recipient pubkey (base‑58 str or Pubkey)
-    lamports    : amount in **lamports** (1 SOL = 1_000_000_000 lamports)
 
-    Returns
-    -------
-    solders.instruction.Instruction
-    """
-    params = TransferParams(
-        from_pubkey=_to_pubkey(from_pubkey),
-        to_pubkey=_to_pubkey(to_pubkey),
-        lamports=lamports,
+async def latest_blockhash() -> str:
+    res = await _rpc("getLatestBlockhash", [{"commitment": "confirmed"}])
+    return res["value"]["blockhash"]
+
+
+def transfer_sol_ix(payer: PublicKey, dest: PublicKey, lamports: int) -> TransactionInstruction:
+    solders_ix: SoldersIX = transfer(
+        TransferParams(from_pubkey=payer.to_solders(), to_pubkey=dest.to_solders(), lamports=lamports)
     )
-    return transfer(params)
+    # convert solders → solana-py Instruction so we can still feed MessageV0
+    accounts = [AccountMeta(pubkey=str(a.pubkey), is_signer=a.is_signer, is_writable=a.is_writable)
+                for a in solders_ix.accounts]
+    return TransactionInstruction(data=bytes(solders_ix.data), program_id=str(solders_ix.program_id), keys=accounts)
