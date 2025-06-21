@@ -26,7 +26,7 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.system_program import TransferParams, transfer
 from solana.transaction import Transaction
-from solana.message import MessageV0
+from solders.message import MessageV0
 
 # ---------------------------------------------------------------------------#
 # Config
