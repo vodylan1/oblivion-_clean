@@ -14,3 +14,4 @@ Thumbs.db
 
 # --- Secrets ---
 config/secrets.json
+.venv/
