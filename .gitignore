@@ -16,3 +16,4 @@ Thumbs.db
 config/secrets.json
 .venv/
 .venv/
+.venv/
