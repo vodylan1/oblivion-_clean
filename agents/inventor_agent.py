@@ -15,5 +15,11 @@ class InventorAgent(Agent):
         if market_data.lp_depth < 10_000 and market_data.volatility < 25:
             slip = estimate_slippage(size=1_000)  # stub size
             if slip < 0.005:  # <0.5 %
-                return TradeSignal(action="BUY_LOW_CONF", confidence=0.8, meta={"agent": self.meta.name})
-        return TradeSignal(action="HOLD", confidence=0.4, meta={"agent": self.meta.name})
+                return TradeSignal(
+                    action="BUY_LOW_CONF",
+                    confidence=0.8,
+                    meta={"agent": self.meta.name},
+                )
+        return TradeSignal(
+            action="HOLD", confidence=0.4, meta={"agent": self.meta.name}
+        )

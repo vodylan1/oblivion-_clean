@@ -1,7 +1,8 @@
 import os, aiohttp, asyncio
 
-_RELAY  = os.getenv("JITO_RELAY",  "https://block-engine.jito.wtf/api/v1/bundles")
-_TOKEN  = os.getenv("JITO_AUTH")          # read from env, **not** secrets.json
+_RELAY = os.getenv("JITO_RELAY", "https://block-engine.jito.wtf/api/v1/bundles")
+_TOKEN = os.getenv("JITO_AUTH")  # read from env, **not** secrets.json
+
 
 async def send_bundle_transaction(bundle: list[bytes]) -> str:
     if not _TOKEN:

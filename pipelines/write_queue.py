@@ -26,7 +26,9 @@ def enqueue(record: Dict):
 
 def _write_sync(rec: Dict):
     LEDGER_FILE.parent.mkdir(parents=True, exist_ok=True)
-    LEDGER_FILE.write_text((LEDGER_FILE.read_text() if LEDGER_FILE.exists() else "") + f"{rec}\n")
+    LEDGER_FILE.write_text(
+        (LEDGER_FILE.read_text() if LEDGER_FILE.exists() else "") + f"{rec}\n"
+    )
 
 
 async def _worker():

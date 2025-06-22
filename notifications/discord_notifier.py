@@ -28,7 +28,7 @@ async def notify(
     content: str = "",
     *,
     embed_title: str | None = None,
-    color: int = 0x2ecc71,
+    color: int = 0x2ECC71,
 ) -> None:
     """
     Send a Discord message.
@@ -78,7 +78,7 @@ class _Lifecycle:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> bool:
-        colour = 0xe74c3c if exc else 0x7289da
+        colour = 0xE74C3C if exc else 0x7289DA
         status = f"⚠️ Crash ({exc})" if exc else "🟥 Stopped"
         await notify("", embed_title=status, color=colour)
         # do not suppress exceptions

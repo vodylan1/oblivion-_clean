@@ -13,7 +13,7 @@ from .genghis_agent import GenghisAgent
 from .nyx_agent import NyxAgent
 from .inventor_agent import InventorAgent
 from .johan_shadow_agent import JohanShadowAgent
-from .hold_agent import HoldAgent   # re‑export
+from .hold_agent import HoldAgent  # re‑export
 
 # re-export shared types
 from agents.base import Agent, AgentMeta, TradeSignal  # noqa: F401

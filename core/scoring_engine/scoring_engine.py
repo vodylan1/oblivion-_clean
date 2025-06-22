@@ -7,8 +7,8 @@ The curve:
 * Falls off linearly as price moves away.
 """
 
-IDEAL_PRICE      = 150.0      # adjust whenever market regime changes
-POINTS_PER_USD   = 0.5        # slope: 1 USD away subtracts 0.5 points
+IDEAL_PRICE = 150.0  # adjust whenever market regime changes
+POINTS_PER_USD = 0.5  # slope: 1 USD away subtracts 0.5 points
 MIN_SCORE, MAX_SCORE = 0.0, 100.0
 
 
@@ -23,8 +23,8 @@ def compute_score(market_data: dict) -> float:
     """
     sol_price = float(market_data.get("sol_price", 0.0))
 
-    distance   = abs(sol_price - IDEAL_PRICE)
-    raw_score  = MAX_SCORE - distance * POINTS_PER_USD
+    distance = abs(sol_price - IDEAL_PRICE)
+    raw_score = MAX_SCORE - distance * POINTS_PER_USD
     final_score = max(MIN_SCORE, min(MAX_SCORE, raw_score))
 
     return final_score

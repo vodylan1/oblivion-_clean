@@ -16,6 +16,7 @@ DUMMY_SNAPSHOT = {
     "tw_sentiment": 0.4,
 }
 
+
 @pytest.mark.asyncio
 async def test_end_to_end_scoring():
     vec = encode_features(DUMMY_SNAPSHOT)

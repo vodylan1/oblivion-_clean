@@ -16,7 +16,7 @@ _TABLE: Dict[CapitalTier, Dict[str, Any]] = {
     CapitalTier.MICRO: {
         "max_trade_usd": 300,
         "min_pool_depth_usd": 10_000,
-        "slip_bps": 300,   # 3 %
+        "slip_bps": 300,  # 3 %
     },
     CapitalTier.SMALL: {
         "max_trade_usd": 1_000,

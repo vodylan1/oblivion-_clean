@@ -9,6 +9,7 @@ We store daily PnL in a ring or do time-based check.
 
 import time
 
+
 class AutoSizeManager:
     def __init__(self):
         self.cvar_daily_95 = 0.088  # from the 4-o stable tail fit
@@ -40,7 +41,7 @@ class AutoSizeManager:
         if self._start_equity <= 0:
             return
 
-        dd = (self._start_equity - equity_now)/ self._start_equity
+        dd = (self._start_equity - equity_now) / self._start_equity
         if dd >= self.daily_loss_cut:
             self.scale_factor = 0.7  # reduce size to 70%
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import statistics
 
+
 def update_weights(pnl_dict: dict[str, list[float]]) -> dict[str, float]:
     """Map 50-trade Sharpe → weight 0-2, with small-sample decay."""
     weights: dict[str, float] = {}

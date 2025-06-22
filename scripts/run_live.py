@@ -44,7 +44,9 @@ if _VENV_ROOT.exists() and _VENV_ROOT.name not in sys.executable:
 # 3. CLI
 # --------------------------------------------------------------------------- #
 p = argparse.ArgumentParser()
-p.add_argument("--skip-bundles", action="store_true", help="Disable Jito bundle submits")
+p.add_argument(
+    "--skip-bundles", action="store_true", help="Disable Jito bundle submits"
+)
 p.add_argument("--log-level", default="INFO", help="Root log level (DEBUG, INFO, …)")
 args = p.parse_args()
 
@@ -66,6 +68,7 @@ from notifications.discord_notifier import lifecycle_notifier
 # honour flag for metrics
 if args.skip_bundles:
     os.environ["OBLIVION_DISABLE_BUNDLES"] = "1"
+
 
 # --------------------------------------------------------------------------- #
 # 5. Orchestrate

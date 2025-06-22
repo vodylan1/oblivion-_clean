@@ -2,6 +2,7 @@
 Synergy Conductor – minimal bootstrap
 Only the PingStrategy is queried until others are re‑enabled.
 """
+
 from __future__ import annotations
 import asyncio
 from typing import Dict, List, Optional, Tuple
@@ -10,16 +11,19 @@ from agents import Agent, TradeSignal
 from core.risk_manager.manager import RiskManager
 from strategies import load as load_strategy
 
-STRATEGY_PRIORITY = ["ping"]             # add more when ready
+STRATEGY_PRIORITY = ["ping"]  # add more when ready
+
 
 class SynergyConductor:
-    def __init__(self, agents: List[Agent], risk_mgr: RiskManager, decay: float = 0.995):
-        self._agents      = agents
-        self._risk_mgr    = risk_mgr
-        self._decay       = decay
-        self._strategies  = {n: load_strategy(n) for n in STRATEGY_PRIORITY}
-        self._weights     = {ag: 1.0 for ag in agents}
-        self._tick_cnt    = 0
+    def __init__(
+        self, agents: List[Agent], risk_mgr: RiskManager, decay: float = 0.995
+    ):
+        self._agents = agents
+        self._risk_mgr = risk_mgr
+        self._decay = decay
+        self._strategies = {n: load_strategy(n) for n in STRATEGY_PRIORITY}
+        self._weights = {ag: 1.0 for ag in agents}
+        self._tick_cnt = 0
 
     async def vote(self, tick: dict | None = None) -> TradeSignal | None:
         return await self.tick(tick)
@@ -58,7 +62,9 @@ class SynergyConductor:
             for ag in self._weights:
                 self._weights[ag] *= self._decay
 
-        sig, _ = max(scored, key=lambda p: p[0].confidence * self._weights.get(p[1], 1.0))
+        sig, _ = max(
+            scored, key=lambda p: p[0].confidence * self._weights.get(p[1], 1.0)
+        )
         return sig
 
     async def run_forever(self, delay: float = 0.4) -> None:

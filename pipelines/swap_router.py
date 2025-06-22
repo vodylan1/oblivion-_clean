@@ -17,11 +17,11 @@ from typing import Final, Literal
 
 import requests
 
-_SOL:   Final[str] = "So11111111111111111111111111111111111111112"
-_USDC:  Final[str] = "Es9vMFrzaCER1z9vSbQx6ghEDcwcY9uCaNuS6dJP5SMi"
+_SOL: Final[str] = "So11111111111111111111111111111111111111112"
+_USDC: Final[str] = "Es9vMFrzaCER1z9vSbQx6ghEDcwcY9uCaNuS6dJP5SMi"
 
 _JUP_URL: Final[str] = "https://quote-api.jup.ag/v6/swap"
-_HEAD:    Final[dict[str, str]] = {"Content-Type": "application/json"}
+_HEAD: Final[dict[str, str]] = {"Content-Type": "application/json"}
 
 # Optional – users who already have a *Jupiter* key can export it
 _JUP_AUTH = os.getenv("JUPITER_AUTH_HEADER") or None
@@ -49,12 +49,12 @@ def _swap(
         }
 
     payload = {
-        "simulate": True,                       # ← keep funds safe
-        "inputMint":  in_mint,
+        "simulate": True,  # ← keep funds safe
+        "inputMint": in_mint,
         "outputMint": out_mint,
-        "inAmount":   lamports,
+        "inAmount": lamports,
         "slippageBps": slippage_bps,
-        "swapMode":   "ExactIn",
+        "swapMode": "ExactIn",
         "onlyDirectRoutes": False,
     }
 

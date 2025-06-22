@@ -2,6 +2,7 @@
 Fail if *repo code* still imports drafts.market_data.
 Gracefully skip binary/ext modules with no source.
 """
+
 import pkgutil, importlib, inspect, pathlib, re, types
 
 root = pathlib.Path(__file__).resolve().parents[1]

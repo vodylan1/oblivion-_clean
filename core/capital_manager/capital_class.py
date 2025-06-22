@@ -9,21 +9,21 @@ from enum import Enum, auto
 
 
 class CapitalTier(Enum):
-    MICRO = auto()   # 0‑5 k USD
-    SMALL = auto()   # 5‑25 k
-    MID   = auto()   # 25‑100 k
-    LARGE = auto()   # 100‑500 k
-    WHALE = auto()   # 500 k+
+    MICRO = auto()  # 0‑5 k USD
+    SMALL = auto()  # 5‑25 k
+    MID = auto()  # 25‑100 k
+    LARGE = auto()  # 100‑500 k
+    WHALE = auto()  # 500 k+
 
     @property
-    def idx(self) -> int:        # for array indexing
+    def idx(self) -> int:  # for array indexing
         return list(CapitalTier).index(self)
 
 
 _THRESHOLDS = {  # lower‑bound USD
     CapitalTier.MICRO: 0,
     CapitalTier.SMALL: 5_000,
-    CapitalTier.MID:   25_000,
+    CapitalTier.MID: 25_000,
     CapitalTier.LARGE: 100_000,
     CapitalTier.WHALE: 500_000,
 }

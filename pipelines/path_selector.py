@@ -10,14 +10,17 @@ Chooses which path to send a transaction:
 import os
 import random
 
+
 def quic_slot_leader_ok() -> bool:
     # stub – realistically we'd track who the slot leader is
     # and if we have direct QUIC route to them
     return random.random() < 0.7  # 70% chance we can do QUIC
 
+
 def helius_online() -> bool:
     # stub
     return True
+
 
 def choose_send_path() -> str:
     # 1. QUIC if leader is known

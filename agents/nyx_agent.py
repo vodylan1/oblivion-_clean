@@ -15,5 +15,9 @@ class NyxAgent(Agent):
         if market_data.meme_hype > 65 and 20 < market_data.volatility < 40:
             # introduce non‑blocking jitter
             await jitter(200)
-            return TradeSignal(action="BUY", confidence=0.9, meta={"agent": self.meta.name})
-        return TradeSignal(action="HOLD", confidence=0.5, meta={"agent": self.meta.name})
+            return TradeSignal(
+                action="BUY", confidence=0.9, meta={"agent": self.meta.name}
+            )
+        return TradeSignal(
+            action="HOLD", confidence=0.5, meta={"agent": self.meta.name}
+        )

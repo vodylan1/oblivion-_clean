@@ -39,7 +39,7 @@ for i in range(N):
     wallets.append({"name": f"stealth-{i}", "pubkey": pub_b58})
 
     print(f"[{i}] {pub_b58}")
-    print(f"    secret  : {priv_b58}\n")   # record this elsewhere!
+    print(f"    secret  : {priv_b58}\n")  # record this elsewhere!
 
     # scrub secret from memory
     del priv_b58, kp

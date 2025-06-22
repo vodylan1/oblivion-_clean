@@ -1,7 +1,8 @@
 import os, aiohttp, asyncio, json
 
 _RELAY = os.getenv("HELIUS_PRIVATE", "https://rpc.helius.xyz/v1/private")
-_KEY   = os.getenv("HELIUS_API_KEY", "")
+_KEY = os.getenv("HELIUS_API_KEY", "")
+
 
 async def send_private(tx_bytes: bytes) -> str:
     if not _KEY:

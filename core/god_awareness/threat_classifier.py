@@ -4,9 +4,9 @@ from .wallet_profiler import WalletProfiler
 
 class Threat(TypedDict):
     token: str
-    level: int          # 0‑3
+    level: int  # 0‑3
     reason: str
-    confidence: float   # 0‑1
+    confidence: float  # 0‑1
 
 
 class ThreatClassifier:

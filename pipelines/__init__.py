@@ -20,6 +20,7 @@ for _mod in ("exec_mesh", "xdex_arbitrage"):
     except Exception:  # pragma: no cover
         print(f"[pipelines] warn: {_mod} failed import – using stub")
 
+
 # ----------------------------------------------------------------─ execution_engine legacy stub
 def _noop(*_a, **_k):  # noqa: D401
     return None
@@ -35,16 +36,16 @@ def _size_lamports(network: str) -> int:  # noqa: D401
         size = balance_lamports * RISK_PCT
     """
     bal = exec_stub._balance_lamports(network)  # type: ignore
-    return int(bal * exec_stub.RISK_PCT)        # type: ignore
+    return int(bal * exec_stub.RISK_PCT)  # type: ignore
 
 
 exec_stub = types.ModuleType("pipelines.execution_engine")
 exec_stub.open_position = _noop
 exec_stub.close_position = _noop
 exec_stub.get_price = lambda *_a, **_k: 0.0  # dummy price
-exec_stub.RISK_PCT = 0.02                    # default 2 %
+exec_stub.RISK_PCT = 0.02  # default 2 %
 exec_stub._balance_lamports = _default_balance  # mock balance
-exec_stub._size_lamports = _size_lamports       # new helper
+exec_stub._size_lamports = _size_lamports  # new helper
 
 sys.modules["pipelines.execution_engine"] = exec_stub
 

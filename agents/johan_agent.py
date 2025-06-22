@@ -12,6 +12,10 @@ class JohanAgent(Agent):
 
     async def logic(self, market_data: MarketData):
         if market_data.volatility > 45 or market_data.meme_hype > 90:
-            return TradeSignal(action="HOLD", confidence=0.95, meta={"agent": self.meta.name})
+            return TradeSignal(
+                action="HOLD", confidence=0.95, meta={"agent": self.meta.name}
+            )
         # For now default HOLD; in Phase 8 will read Conductor state
-        return TradeSignal(action="HOLD", confidence=0.5, meta={"agent": self.meta.name})
+        return TradeSignal(
+            action="HOLD", confidence=0.5, meta={"agent": self.meta.name}
+        )

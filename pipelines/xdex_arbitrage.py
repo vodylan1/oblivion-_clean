@@ -13,9 +13,13 @@ from pipelines.signal_utils import latency_spread
 try:
     from core.risk_manager.auto_tuner import tip_auto_tuner  # real module
 except ImportError:
-    class _DummyTuner:          # minimal stub for tests
-        def get_tip_lamports(self) -> int: return 500
-        def record_slot(self, **kwds):      ...
+
+    class _DummyTuner:  # minimal stub for tests
+        def get_tip_lamports(self) -> int:
+            return 500
+
+        def record_slot(self, **kwds): ...
+
     tip_auto_tuner = _DummyTuner()
 
 _risk_mgr = RiskManager.instance()
@@ -31,7 +35,10 @@ async def xdex_arbitrage_main(quote_override: dict[str, float] | None = None) ->
             timeout=3,
         )
         data = resp.json()["pairs"][0]
-        quote = {"ray_ask": float(data["priceNative"]), "orca_bid": float(data["priceUsd"])}
+        quote = {
+            "ray_ask": float(data["priceNative"]),
+            "orca_bid": float(data["priceUsd"]),
+        }
 
     spread_pct = latency_spread(quote["ray_ask"], quote["orca_bid"]) * 100
     if spread_pct < MIN_SPREAD_PCT:

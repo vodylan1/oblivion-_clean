@@ -9,6 +9,7 @@ from typing import Dict
 
 from core.risk_manager.auto_tuner import AutoTuner
 
+
 # Sentinel is intentionally stateless; the Conductor pipes every order dict
 def intercept(order: Dict) -> Dict:
     tune = AutoTuner.instance().tune()

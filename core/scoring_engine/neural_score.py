@@ -11,18 +11,21 @@ import json
 from pathlib import Path
 from typing import Final
 
-from .scoring_engine import compute_score as price_score        # reuse
+from .scoring_engine import compute_score as price_score  # reuse
+
 # ────────────────────────────────────────────────────────────────
-_CFG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config" / "neural_weights.json"
+_CFG_PATH: Final[Path] = (
+    Path(__file__).resolve().parents[2] / "config" / "neural_weights.json"
+)
 _DEFAULTS: Final[dict[str, float]] = {"w_price": 0.5, "w_meme": 0.5, "bias": 0.0}
 
-_WEIGHTS: dict[str, float] | None = None     # lazy-loaded
+_WEIGHTS: dict[str, float] | None = None  # lazy-loaded
 
 
 def _load_weights() -> dict[str, float]:
     global _WEIGHTS
     if _WEIGHTS is not None:
-        return _WEIGHTS                       # already cached
+        return _WEIGHTS  # already cached
 
     try:
         data: dict[str, float] = json.loads(_CFG_PATH.read_text())
@@ -38,7 +41,7 @@ def _load_weights() -> dict[str, float]:
 
 
 # ────────────────────────────────────────────────────────────────
-def compute_score(market_data: dict) -> float:            # public API
+def compute_score(market_data: dict) -> float:  # public API
     """
     Returns composite score ∈ [0, 100].
     Currently consumes:
@@ -47,9 +50,9 @@ def compute_score(market_data: dict) -> float:            # public API
     """
     w = _load_weights()
 
-    price_part = price_score(market_data)                 # already 0-100
-    hype_raw   = float(market_data.get("meme_hype", 0.0)) # 0-100
-    hype_part  = max(0.0, min(100.0, hype_raw))
+    price_part = price_score(market_data)  # already 0-100
+    hype_raw = float(market_data.get("meme_hype", 0.0))  # 0-100
+    hype_part = max(0.0, min(100.0, hype_raw))
 
     score = w["w_price"] * price_part + w["w_meme"] * hype_part + w["bias"]
     # clamp

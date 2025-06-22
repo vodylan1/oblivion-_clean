@@ -27,8 +27,10 @@ class EgoState(str, Enum):
 
 def ego_core_init() -> None:
     """Initialise EGO_CORE (placeholder)."""
-    print("[EGO_CORE] Initialised – archetypes: "
-          f"{', '.join(e.value for e in EgoState)}")
+    print(
+        "[EGO_CORE] Initialised – archetypes: "
+        f"{', '.join(e.value for e in EgoState)}"
+    )
 
 
 def apply_emotional_overlay(decision: str, emotional_state: str) -> str:
@@ -83,6 +85,8 @@ def apply_emotional_overlay(decision: str, emotional_state: str) -> str:
         return decision
 
     # Fallback – unknown archetype, leave untouched
-    print(f"[EGO_CORE] WARNING: unknown ego state '{emotional_state}', "
-          "no overlay applied.")
+    print(
+        f"[EGO_CORE] WARNING: unknown ego state '{emotional_state}', "
+        "no overlay applied."
+    )
     return decision

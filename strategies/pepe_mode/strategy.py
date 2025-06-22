@@ -5,6 +5,7 @@ from core.risk_manager.manager import RiskManager
 
 PARAMS = yaml.safe_load((pathlib.Path("config") / "pepe_params.yaml").read_text())
 
+
 class Strategy:
     """Narrative momentum tail strategy."""
 

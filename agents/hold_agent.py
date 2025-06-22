@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from agents.base import TradeSignal
 
 
-class HoldAgent:          # pylint: disable=too-few-public-methods
+class HoldAgent:  # pylint: disable=too-few-public-methods
     name = "HOLD"
 
     async def tick(self, _: Dict[str, Any] | None = None) -> Optional[TradeSignal]:

@@ -5,6 +5,7 @@ import yaml, pathlib
 
 PARAMS = yaml.safe_load((pathlib.Path("config") / "whale_params.yaml").read_text())
 
+
 class Strategy:
     def __init__(self):
         self.risk_mgr = RiskManager.instance()
@@ -13,8 +14,8 @@ class Strategy:
         # if self.risk_mgr.capital_tier() < 5:
         #     raise ValueError(5)
 
-        flow = mkt_tick.get("whale_flow_usd", 0.)
-        zscore = mkt_tick.get("price_z", 0.)
+        flow = mkt_tick.get("whale_flow_usd", 0.0)
+        zscore = mkt_tick.get("price_z", 0.0)
         tier = self.risk_mgr.capital_tier()
 
         if flow >= PARAMS["min_flow"][tier] and zscore >= PARAMS["min_z"]:

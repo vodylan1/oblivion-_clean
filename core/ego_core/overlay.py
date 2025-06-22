@@ -18,8 +18,8 @@ class EmotionOverlay:
             self.win_streak = 0
 
     def apply(self, confidence: float) -> float:
-        if self.win_streak >= 3:          # rage
+        if self.win_streak >= 3:  # rage
             return min(confidence * 1.2, 1.0)
-        if self.loss_streak >= 2:         # fear
+        if self.loss_streak >= 2:  # fear
             return confidence * 0.5
         return confidence

@@ -16,13 +16,13 @@ from typing import Any, Dict, List
 # ───────────────────────────────────────────────────────────────────────────
 _STORAGE = Path(__file__).parent.parent / "storage"
 _STORAGE.mkdir(exist_ok=True)
-_LEDGER  = _STORAGE / "positions.json"       # single source of truth
+_LEDGER = _STORAGE / "positions.json"  # single source of truth
 
 
 class _PositionManager:
     def __init__(self) -> None:
-        self._open: List[Dict[str, Any]] = []     # live positions
-        self._hist: List[Dict[str, Any]] = []     # closed history
+        self._open: List[Dict[str, Any]] = []  # live positions
+        self._hist: List[Dict[str, Any]] = []  # closed history
         self._load()
 
     # ───────── persistence helpers ────────────────────────────────────────
@@ -34,7 +34,7 @@ class _PositionManager:
             self._open = data.get("open", [])
             self._hist = data.get("history", [])
             print(f"[PositionManager] Restored {len(self._open)} open positions.")
-        except Exception as exc:                       # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             print(f"[PositionManager] Corrupt ledger – starting fresh ({exc})")
 
     def _flush(self) -> None:
@@ -44,11 +44,11 @@ class _PositionManager:
     # ───────── public API ─────────────────────────────────────────────────
     def open_long(self, size: float, entry_price: float, sig: str) -> None:
         rec = {
-            "ts":    time.time(),
-            "side":  "LONG",
-            "size":  size,
+            "ts": time.time(),
+            "side": "LONG",
+            "size": size,
             "entry": entry_price,
-            "sig":   sig,
+            "sig": sig,
         }
         self._open.append(rec)
         self._flush()

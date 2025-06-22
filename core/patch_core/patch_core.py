@@ -6,9 +6,11 @@ Calls GPT (theoretically) to propose code changes or parameter updates
 based on signals from REFLECTION_ENGINE.
 """
 
+
 def patch_core_init():
     """Initialize PATCH_CORE (placeholder)."""
     print("[PatchCore] Initialized.")
+
 
 def request_autopatch():
     """
@@ -20,7 +22,7 @@ def request_autopatch():
     suggestion = {
         "param": "buy_threshold",
         "new_value": 18,
-        "reason": "Loss streak detected. Lower buy threshold for better entry."
+        "reason": "Loss streak detected. Lower buy threshold for better entry.",
     }
     print(f"[PatchCore] Suggestion: {suggestion}")
     # We won't actually apply the patch automatically yet in Phase 3.

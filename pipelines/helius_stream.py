@@ -8,7 +8,7 @@ from __future__ import annotations
 import os, json, asyncio, aiohttp, pathlib, random, backoff
 
 STEALTH_JSON = pathlib.Path("wallets/stealth_pool.json")
-HELIUS_KEY   = os.getenv("HELIUS_API_KEY")
+HELIUS_KEY = os.getenv("HELIUS_API_KEY")
 if not HELIUS_KEY:
     raise RuntimeError("HELIUS_API_KEY env‑var missing")
 
@@ -42,20 +42,21 @@ async def _connect_and_stream(ws_url: str) -> None:
 
     sub_msg = {
         "jsonrpc": "2.0",
-        "id":      1,
-        "method":  "accountSubscribe",
-        "params":  [accs, {"encoding": "base64"}],
+        "id": 1,
+        "method": "accountSubscribe",
+        "params": [accs, {"encoding": "base64"}],
     }
 
-    async with aiohttp.ClientSession() as sess, \
-               sess.ws_connect(ws_url, autoping=True, heartbeat=15) as ws:
+    async with aiohttp.ClientSession() as sess, sess.ws_connect(
+        ws_url, autoping=True, heartbeat=15
+    ) as ws:
         await ws.send_json(sub_msg)
         print(f"[helius] subscribed to {len(accs)} accounts via {ws_url}")
 
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(msg.data)
-                await on_msg(data)            # <-- fixed: on_msg is async
+                await on_msg(data)  # <-- fixed: on_msg is async
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 raise msg.data
 

@@ -7,6 +7,7 @@ Every *period* seconds:
   • wrap it in a VersionedTransaction v0
   • post as a single‑tx bundle to Jito
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,13 +32,14 @@ _TIP_ACCT: Final[Pubkey] = Pubkey.from_string(
 )
 _LAMPORTS: Final[int] = 1_000
 
-class Strategy:                           # class name expected by loader
+
+class Strategy:  # class name expected by loader
     def __init__(self, period: int = 5):
         self._period = period
         self._task: asyncio.Task | None = None
 
     # SynergyConductor calls this once per tick
-    async def decide(self, *_):           # accept *args for forward‑compat
+    async def decide(self, *_):  # accept *args for forward‑compat
         if self._task is None:
             self._task = asyncio.create_task(self._loop())
 
@@ -49,7 +51,9 @@ class Strategy:                           # class name expected by loader
         while True:
             try:
                 # 1) latest block‑hash
-                bh = Hash.from_string((await rpc.get_latest_blockhash()).value.blockhash)
+                bh = Hash.from_string(
+                    (await rpc.get_latest_blockhash()).value.blockhash
+                )
 
                 # 2) system‑transfer instruction
                 ix: SoldersIx = transfer(
@@ -62,7 +66,7 @@ class Strategy:                           # class name expected by loader
 
                 # 3) message v0 + tx
                 msg = MessageV0.new(SIGNER.pubkey(), [ix], [], bh)
-                tx  = VersionedTransaction(msg, [SIGNER])
+                tx = VersionedTransaction(msg, [SIGNER])
 
                 # 4) send
                 bundle_id = await send_bundle([tx])

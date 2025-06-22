@@ -14,8 +14,8 @@ class AgentMeta(BaseModel):
 
 
 class TradeSignal(BaseModel):
-    action: str           # BUY | SELL | SHORT | CLOSE | HOLD | BUY_LOW_CONF
-    confidence: float     # 0‑1
+    action: str  # BUY | SELL | SHORT | CLOSE | HOLD | BUY_LOW_CONF
+    confidence: float  # 0‑1
     meta: Dict[str, Any] = {}
 
 

@@ -2,7 +2,7 @@
 reflection_engine.py
 
 REFLECTION_ENGINE module for Phase 3.
-Collects trade outcomes, logs them, and checks for repeated mistakes 
+Collects trade outcomes, logs them, and checks for repeated mistakes
 or anomalies to potentially trigger PATCH_CORE.
 """
 
@@ -13,9 +13,11 @@ import time
 # (In the future, might read/write from logs/reflection_logs.md)
 trade_history = []
 
+
 def reflection_engine_init():
     """Initialize REFLECTION_ENGINE (placeholder)."""
     print("[ReflectionEngine] Initialized.")
+
 
 def log_trade_outcome(decision: str, sol_price: float, profit_loss: float = 0.0):
     """
@@ -27,7 +29,7 @@ def log_trade_outcome(decision: str, sol_price: float, profit_loss: float = 0.0)
         "timestamp": timestamp,
         "decision": decision,
         "sol_price": sol_price,
-        "profit_loss": profit_loss
+        "profit_loss": profit_loss,
     }
     trade_history.append(outcome_record)
 
@@ -36,13 +38,16 @@ def log_trade_outcome(decision: str, sol_price: float, profit_loss: float = 0.0)
     reflection_log_path = os.path.join(logs_dir, "reflection_logs.md")
 
     with open(reflection_log_path, "a", encoding="utf-8") as f:
-        f.write(f"Time: {timestamp}, Decision: {decision}, Price: {sol_price}, PnL: {profit_loss}\n")
+        f.write(
+            f"Time: {timestamp}, Decision: {decision}, Price: {sol_price}, PnL: {profit_loss}\n"
+        )
+
 
 def analyze_history_and_trigger_patch():
     """
     Check trade_history for repeated mistakes or triggers.
     If we find anomalies, call PATCH_CORE.
-    For Phase 3, we'll do a simple check: 
+    For Phase 3, we'll do a simple check:
     If we have 3 consecutive trades with negative profit_loss, we trigger a patch request.
     """
     if len(trade_history) < 3:

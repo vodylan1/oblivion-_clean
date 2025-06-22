@@ -20,6 +20,7 @@ from typing import Optional
 import numpy as np
 from pydantic import BaseModel, Field, PositiveFloat
 
+
 # ————————————————————————————————————————————
 class AutoTuneCfg(BaseModel):
     var_lookback_h: PositiveFloat = Field(
@@ -34,6 +35,7 @@ class AutoTuneCfg(BaseModel):
 
 class TuningSignal(BaseModel):
     """Down‑stream order‑sizing hint."""
+
     size_multiplier: float
     prio_fee_multiplier: float
     comment: str
@@ -66,6 +68,7 @@ def _fit_evt_tail(returns: np.ndarray, thresh: float = 0.95) -> tuple[float, flo
 # ————————————————————————————————————————————
 class AutoTuner:
     """Singleton auto‑tuner with rolling buffer."""
+
     _INSTANCE: Optional["AutoTuner"] = None
 
     @classmethod
@@ -86,13 +89,15 @@ class AutoTuner:
         # trim to last N hours (assume 1 point / h for stub)
         max_len = int(self.cfg.var_lookback_h)
         if len(self._pnl_history) > max_len:
-            self._pnl_history = self._pnl_history[-max_len :]
+            self._pnl_history = self._pnl_history[-max_len:]
 
     # ———
     def tune(self) -> TuningSignal:
         """Return live size / fee multipliers given risk constraints."""
         if len(self._pnl_history) < 10:
-            return TuningSignal(size_multiplier=1.0, prio_fee_multiplier=1.0, comment="Bootstrapping")
+            return TuningSignal(
+                size_multiplier=1.0, prio_fee_multiplier=1.0, comment="Bootstrapping"
+            )
 
         ret = np.array(self._pnl_history) / 100.0  # pct → fraction
         # 1‑day 99 % VaR
@@ -118,4 +123,6 @@ class AutoTuner:
             fee_mult *= 1.3
 
         comment = f"VaR99={var_99:.2f}% dd={dd:.2f}% xi={xi:.3f}"
-        return TuningSignal(size_multiplier=size_mult, prio_fee_multiplier=fee_mult, comment=comment)
+        return TuningSignal(
+            size_multiplier=size_mult, prio_fee_multiplier=fee_mult, comment=comment
+        )

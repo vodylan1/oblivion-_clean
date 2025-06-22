@@ -5,6 +5,7 @@ from core.risk_manager.manager import RiskManager
 
 PARAMS = yaml.safe_load((pathlib.Path("config") / "arb_params.yaml").read_text())
 
+
 class Strategy:
     """Cross‑DEX atomic arbitrage using Jito bundle‑simulation."""
 

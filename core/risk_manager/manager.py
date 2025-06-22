@@ -9,7 +9,8 @@ from typing import Optional
 
 class _TierInt(int):
     """Behaves like int and like a callable returning that int."""
-    def __call__(self) -> int:       # noqa: D401
+
+    def __call__(self) -> int:  # noqa: D401
         return int(self)
 
 
@@ -45,7 +46,7 @@ class RiskManager:
         return size_lamports <= self._bucket_cap
 
     # ---------------- conductor / strategy interface ----------------------
-    def accept(self, _sig) -> bool:          # always accept – stub
+    def accept(self, _sig) -> bool:  # always accept – stub
         return True
 
     async def assess_and_maybe_fire(self, sig) -> None:  # noqa: ANN001
@@ -53,5 +54,5 @@ class RiskManager:
             print("[risk_mgr] would execute:", sig)
 
     # ── TEMP stub: disable gating so placeholder strats stop raising error 5
-    def capital_tier(self) -> int:          # Phase 11‑c will restore logic
+    def capital_tier(self) -> int:  # Phase 11‑c will restore logic
         return 0

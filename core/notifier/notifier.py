@@ -30,9 +30,9 @@ import requests
 
 # ─── constants ────────────────────────────────────────────────────────────
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]  # two levels up
-SECRETS   : Final[Path] = REPO_ROOT / "config" / "secrets.json"
+SECRETS: Final[Path] = REPO_ROOT / "config" / "secrets.json"
 
-_WEBHOOK: Optional[str] = None          # populated lazily
+_WEBHOOK: Optional[str] = None  # populated lazily
 _INIT = False
 
 

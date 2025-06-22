@@ -14,21 +14,25 @@ import time
 from pathlib import Path
 
 # ── PublicKey shim ───────────────────────────────────────────────────────
-try:                                      # ➊ solana-py present
+try:  # ➊ solana-py present
     from solana.publickey import PublicKey  # type: ignore
+
     def _to_pubkey(s: str) -> PublicKey:
         return PublicKey(s)
-except ModuleNotFoundError:               # ➋ fallback to solders
+
+except ModuleNotFoundError:  # ➋ fallback to solders
     from solders.pubkey import Pubkey as _Pub
+
     def _to_pubkey(s: str) -> _Pub:
         return _Pub.from_string(s)
 
-from solana.rpc.api import Client         # solana-py is still required
+
+from solana.rpc.api import Client  # solana-py is still required
 
 # ── constants & configuration ────────────────────────────────────────────
 # Wrapped-SOL mint – never rug-checked
 _KNOWN_SAFE = {
-    "So11111111111111111111111111111111111111112",          # wSOL
+    "So11111111111111111111111111111111111111112",  # wSOL
 }
 
 # Optional user whitelist  config/whitelist.json  (["mint1", "mint2", …])
@@ -40,13 +44,13 @@ except FileNotFoundError:
 except json.JSONDecodeError as err:
     print(f"[RugCheck] Malformed whitelist.json – {err}")
 
-_MIN_LP_SOL       = 50       # < 50 SOL liquidity → WARN / BLOCK
-_WARN_SELL_TAX_P  = 8
+_MIN_LP_SOL = 50  # < 50 SOL liquidity → WARN / BLOCK
+_WARN_SELL_TAX_P = 8
 _BLOCK_SELL_TAX_P = 15
 
-_CACHE   : dict[str, str]  = {}
-_TS      : dict[str, float] = {}
-_TTL_S   = 3600
+_CACHE: dict[str, str] = {}
+_TS: dict[str, float] = {}
+_TTL_S = 3600
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -62,7 +66,7 @@ def _get_transfer_fee_pct(client: Client, mint) -> int:
             return 0
         fee_bps = int.from_bytes(data[36:38], "little")
         return fee_bps // 100
-    except Exception:      # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return -1
 
 
@@ -94,7 +98,7 @@ def rug_check(mint_addr: str, client: Client) -> str:
         return _CACHE[mint_addr]
 
     verdict = "SAFE"
-    mint    = _to_pubkey(mint_addr)
+    mint = _to_pubkey(mint_addr)
 
     # 2. sell-tax heuristic -------------------------------------------------
     fee = _get_transfer_fee_pct(client, mint)
@@ -113,5 +117,5 @@ def rug_check(mint_addr: str, client: Client) -> str:
         verdict = "WARN"
 
     _CACHE[mint_addr] = verdict
-    _TS[mint_addr]    = now
+    _TS[mint_addr] = now
     return verdict
