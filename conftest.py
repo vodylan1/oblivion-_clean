@@ -1,12 +1,19 @@
 """
-conftest.py – makes `import core.…` work inside isolated pytest sessions.
+conftest.py – ensures project imports work inside isolated pytest sessions.
 
-By appending the repository root to ``sys.path`` we ensure every
-package/module under this tree can be imported during unit-tests,
-regardless of the current working directory.
+By appending the repository root to ``sys.path`` we make every package /
+module under this tree importable during unit-tests, regardless of the
+current working directory.
 """
 
 from __future__ import annotations
+
+# --------------------------------------------------------------------------
+# Register the Solana stub *before* Pytest begins collecting tests.
+import importlib
+
+importlib.import_module("solana_stub")  # registers "solana.*" modules
+# --------------------------------------------------------------------------
 
 import sys
 from pathlib import Path
