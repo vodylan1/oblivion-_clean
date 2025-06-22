@@ -8,6 +8,7 @@ Phase-8 prototype
 * Logs every proposal to  core/mutation_engine/patch_log.jsonl
 * Fires a Discord notification so you see it in real time
 """
+
 from __future__ import annotations
 
 import json
@@ -46,21 +47,21 @@ def propose_patch(history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     dict | None
         A JSON-serialisable suggestion or *None* if no action.
     """
-    if len(history) < 5:                         # not enough evidence?
+    if len(history) < 5:  # not enough evidence?
         return None
 
     recent = history[-5:]
     avg_pnl = sum(t["profit_loss"] for t in recent) / 5
 
     if avg_pnl >= 0:
-        return None                              # performing fine
+        return None  # performing fine
 
     # ---- compose suggestion -------------------------------------------------
     suggestion: Dict[str, Any] = {
-        "ts":       time.time(),
-        "param":    "buy_threshold",
+        "ts": time.time(),
+        "param": "buy_threshold",
         "new_value": 18 if avg_pnl < -10 else 20,
-        "reason":   f"avg PnL last 5 = {avg_pnl:.2f} USD",
+        "reason": f"avg PnL last 5 = {avg_pnl:.2f} USD",
     }
 
     # side-effects

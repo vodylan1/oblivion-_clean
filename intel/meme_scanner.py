@@ -27,10 +27,10 @@ import requests
 _ENDPOINT: str = "https://api.multifeed.xyz/v1/hype-score"
 _API_KEY: str | None = None
 
-_HYPE: float = 50.0               # cached score (0-100)
-_LOCK = threading.Lock()          # guards _HYPE updates
-_LAST_TS: float = 0.0             # last successful fetch
-_MIN_POLL_S: int = 15             # poll interval (secs)
+_HYPE: float = 50.0  # cached score (0-100)
+_LOCK = threading.Lock()  # guards _HYPE updates
+_LAST_TS: float = 0.0  # last successful fetch
+_MIN_POLL_S: int = 15  # poll interval (secs)
 
 
 # --------------------------------------------------------------------------- #
@@ -45,7 +45,7 @@ def meme_scanner_init() -> None:
     """
     global _API_KEY, _HYPE, _LAST_TS
 
-    if _API_KEY is not None:           # already initialised
+    if _API_KEY is not None:  # already initialised
         return
 
     _API_KEY = os.getenv("MULTIFEED_KEY")
@@ -54,12 +54,12 @@ def meme_scanner_init() -> None:
         return
 
     try:
-        _HYPE = _fetch_hype_score()    # warm-up
+        _HYPE = _fetch_hype_score()  # warm-up
         _LAST_TS = time.time()
         print("[MemeScanner] Online – MultiFeed feed")
-    except Exception as exc:           # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         print(f"[MemeScanner] Init error → {exc!r} → fallback to dummy hype.")
-        _API_KEY = None                # force dummy mode
+        _API_KEY = None  # force dummy mode
 
 
 # --------------------------------------------------------------------------- #
@@ -81,7 +81,7 @@ def scan_feeds() -> Dict[str, Any]:
             with _LOCK:
                 _HYPE = max(0.0, min(100.0, score))
                 _LAST_TS = time.time()
-        except Exception as exc:       # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             # keep last good value; log once every minute at most
             if int(time.time()) % 60 == 0:
                 print(f"[MemeScanner] Fetch error → {exc!r} (keeping cache)")

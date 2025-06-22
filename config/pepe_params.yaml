@@ -1,0 +1,6 @@
+theta:
+  micro: 0.65
+  small: 0.70
+  mid:   0.75
+  large: 0.80
+  whale: 0.85

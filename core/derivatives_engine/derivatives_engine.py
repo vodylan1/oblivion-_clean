@@ -19,6 +19,7 @@ try:
     from anchorpy import Wallet
     from driftpy.constants.config import devnet_config
     from driftpy.setup import DriftClient  # type: ignore
+
     _DRIFT_OK = True
 except Exception as err:  # noqa: BLE001
     print(f"[DerivativesEngine] Drift not available, running in stub mode – {err}")

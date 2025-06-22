@@ -1,0 +1,39 @@
+{
+  "generated_at": "2025-06-14 19:53:25 UTC",
+  "rpc_hint": "https://api.mainnet-beta.solana.com",
+  "wallets": [
+    {
+      "name": "stealth-0",
+      "pubkey": "DZQWGycJyhKrEiG3FjpepJxzAtn26UYnkdcvaHzCGc4R"
+    },
+    {
+      "name": "stealth-1",
+      "pubkey": "2BiZp2iHKtLUQ2ykJ3F8YoToS4MwaktVMXFXtJ1RDtAN"
+    },
+    {
+      "name": "stealth-2",
+      "pubkey": "J7VTKNhp7HtR9ARo6tdn7seK93Y93sc8dy7jD8Ns3kGs"
+    },
+    {
+      "name": "stealth-3",
+      "pubkey": "EtzXwyxaeCveGx93y43pmEA9gPyB2nEYAt5ZmscobRLp"
+    },
+    {
+      "name": "stealth-4",
+      "pubkey": "8rVZhxhfABR1zCZPGjd8EbekRP7tPmdEKLXfptF5FUuE"
+    },
+    {
+      "name": "stealth-5",
+      "pubkey": "7DRsuSXSKQpFvRC1H512q9qBgFhbd1S1qM59oGAsHREN"
+    },
+    {
+      "name": "stealth-6",
+      "pubkey": "59fntaRbDofUGinicgbt2KkP6xbgEtVDFzMaEhkP1ZjH"
+    },
+    {
+      "name": "stealth-7",
+      "pubkey": "5j5bH472bKy7ZrS8QwDkDx9CKyYXfX2wbxPum6fAUo8J"
+    }
+
+  ]
+}

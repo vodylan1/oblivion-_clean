@@ -12,14 +12,13 @@ import time
 from core.god_awareness.god_awareness import scan_for_whale_activity
 
 # Shared variable to store the latest whale alert
-latest_whale_alert = {
-    "whale_alert": False,
-    "info": ""
-}
+latest_whale_alert = {"whale_alert": False, "info": ""}
+
 
 def concurrency_manager_init():
     """Initialize concurrency manager (placeholder)."""
     print("[ConcurrencyManager] Initialized.")
+
 
 def god_awareness_thread_func():
     """
@@ -36,6 +35,7 @@ def god_awareness_thread_func():
 
         # Sleep before scanning again
         time.sleep(5)
+
 
 def start_god_awareness_thread():
     """

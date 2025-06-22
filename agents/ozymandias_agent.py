@@ -1,5 +1,5 @@
 from agents.base import Agent, AgentMeta, TradeSignal
-from drafts.market_data import MarketData
+from core.common.market_data import MarketData
 
 
 class OzymandiasAgent(Agent):
@@ -25,4 +25,6 @@ class OzymandiasAgent(Agent):
             action = "BUY"
             conf = 0.85
         self._last_price = market_data.price
-        return TradeSignal(action=action, confidence=conf, meta={"agent": self.meta.name})
+        return TradeSignal(
+            action=action, confidence=conf, meta={"agent": self.meta.name}
+        )

@@ -1,0 +1,6 @@
+tier_threshold:
+  micro: 4      # bps
+  small: 5
+  mid: 7
+  large: 8
+  whale: 10

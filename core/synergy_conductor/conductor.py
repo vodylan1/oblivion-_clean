@@ -1,50 +1,73 @@
 """
-Oblivion – Synergy Conductor v1.2
-• collects votes from enabled Agents
-• applies dynamic Sharpe‑based weights
-• overlays emotion (rage / fear) on confidence
+Synergy Conductor – minimal bootstrap
+Only the PingStrategy is queried until others are re‑enabled.
 """
 
 from __future__ import annotations
-
 import asyncio
-from typing import Any, Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from agents import Agent, TradeSignal
-from core.ego_core.overlay import EmotionOverlay
-from core.synergy_conductor.weighting import update_weights
+from core.risk_manager.manager import RiskManager
+from strategies import load as load_strategy
+
+STRATEGY_PRIORITY = ["ping"]  # add more when ready
 
 
 class SynergyConductor:
-    def __init__(self, agents: List[Agent], decay: float = 0.97):
-        self.agents = [a for a in agents if a.meta.enabled]
-        self.weights: Dict[str, float] = {a.meta.name: 1.0 for a in self.agents}
-        self.decay = decay
+    def __init__(
+        self, agents: List[Agent], risk_mgr: RiskManager, decay: float = 0.995
+    ):
+        self._agents = agents
+        self._risk_mgr = risk_mgr
+        self._decay = decay
+        self._strategies = {n: load_strategy(n) for n in STRATEGY_PRIORITY}
+        self._weights = {ag: 1.0 for ag in agents}
+        self._tick_cnt = 0
 
-        self.pnl_history: Dict[str, List[float]] = {a.meta.name: [] for a in self.agents}
-        self.emotion = EmotionOverlay()
-        self._cycle = 0
+    async def vote(self, tick: dict | None = None) -> TradeSignal | None:
+        return await self.tick(tick)
 
-    # ──────────────────────────────────────────────
+    async def tick(self, tick: dict | None = None) -> TradeSignal | None:
+        tick = tick or {}
 
-    async def vote(self, market_data: Dict[str, Any]) -> TradeSignal:
-        """Gather async votes and output a final TradeSignal."""
-        signals = await asyncio.gather(*(a.logic(market_data) for a in self.agents))
+        # pass A – strategies
+        for name, strat in self._strategies.items():
+            try:
+                sig: Optional[TradeSignal] = await strat.decide(tick)
+            except Exception as exc:
+                print(f"[conductor] {name} error:", exc)
+                sig = None
+            if sig and self._risk_mgr.accept(sig):
+                return sig
 
-        score: Dict[str, float] = {}
-        for sig in signals:
-            w = self.weights.get(sig.meta.get("agent", ""), 1.0)
-            score[sig.action] = score.get(sig.action, 0.0) + sig.confidence * w
+        # pass B – legacy agents (kept unchanged)
+        scored: List[Tuple[TradeSignal, Agent]] = []
+        for ag in self._agents:
+            if not hasattr(ag, "tick"):
+                continue
+            try:
+                sig = await ag.tick(tick)
+            except Exception as exc:
+                print("[conductor] agent error:", exc)
+                continue
+            if sig:
+                scored.append((sig, ag))
 
-        best_action = max(score, key=score.get)
-        conf = score[best_action] / len(self.agents)
+        if not scored:
+            return TradeSignal(action="HOLD", confidence=0.0, meta={})
 
-        # emotion overlay
-        conf = self.emotion.apply(conf)
+        self._tick_cnt += 1
+        if self._tick_cnt % 20 == 0:
+            for ag in self._weights:
+                self._weights[ag] *= self._decay
 
-        # update weights every 20 cycles
-        self._cycle += 1
-        if self._cycle % 20 == 0:
-            self.weights = update_weights(self.pnl_history)
+        sig, _ = max(
+            scored, key=lambda p: p[0].confidence * self._weights.get(p[1], 1.0)
+        )
+        return sig
 
-        return TradeSignal(action=best_action, confidence=conf)
+    async def run_forever(self, delay: float = 0.4) -> None:
+        while True:
+            await self.tick({})
+            await asyncio.sleep(delay)

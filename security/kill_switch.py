@@ -10,11 +10,13 @@ Simple PnL-based kill switch.  When tripped we:
 The helper never imports anything heavy so that it can be used from inside
 tight loops without penalty.
 """
+
 from __future__ import annotations
 
 from typing import List, Dict
 
 from core.notifier.notifier import notify
+
 
 # ────────────────────────────────────────────────────────────────────────────
 class KillSwitchTripped(RuntimeError):
@@ -51,5 +53,5 @@ def check_kill_switch_conditions(trade_history: List[Dict]) -> None:
             "🚨 **KILL SWITCH** triggered  –  recent PnL:"
             f" {total_recent:.2f} USD  (worst {worst_single:.2f})"
         )
-        notify(msg)                # Discord alert
+        notify(msg)  # Discord alert
         raise KillSwitchTripped(msg)
