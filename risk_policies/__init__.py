@@ -5,6 +5,7 @@ Public API
 ----------
 get_max_exposure_usd(balance: Decimal, open_pos: Decimal) -> Decimal
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -14,7 +15,7 @@ from pathlib import Path
 import json
 
 _CFG = Path("config/risk_policy.json")
-_DEFAULT = "risk_policies.static_25"          # dotted‑path to implementation
+_DEFAULT = "risk_policies.static_25"  # dotted‑path to implementation
 
 
 @lru_cache(maxsize=1)
@@ -27,7 +28,7 @@ def _impl():
         except Exception:
             pass
     module = import_module(mod_name)
-    return module.Policy()                    # must expose Policy class
+    return module.Policy()  # must expose Policy class
 
 
 def get_max_exposure_usd(balance: Decimal, open_pos: Decimal) -> Decimal:
