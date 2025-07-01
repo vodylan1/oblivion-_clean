@@ -8,13 +8,12 @@ a live-refresh bucket-cap sourced from `risk_policies.*`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import Final
 
 from config.parameters import VAR_CAP_RATIO
 from risk_policies import load_policy
 from security.secure_wallet import get_wallet_balance_usd
-from core.trade_types import (          # ← updated path
+from trade_types import (            # ← restored path
     TradeSide,
     TradeSignal,
     TradeResult,
