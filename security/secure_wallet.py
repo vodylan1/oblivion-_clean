@@ -7,6 +7,15 @@ Required env-vars
     OBLIVION_PING_TIP  – tip (lamports) to attach to every bundle, default 0
 """
 
+# -----------------------------------------------------------------------------
+# Minimal wallet helpers used by pipelines.* for CI.
+# Replace with real Helius/Jito implementation in Phase-4.
+# -----------------------------------------------------------------------------
+def get_wallet_balance_usd(address: str | None = None) -> float:
+    """Return current wallet balance in USD (stub = 10 000)."""
+    return 10_000.0
+
+
 from __future__ import annotations
 
 import json
@@ -42,7 +51,7 @@ _TIP_LAMPORTS: Final[int] = int(os.getenv("OBLIVION_PING_TIP", "0"))
 _be: Final[AsyncBlockEngineClient] = AsyncBlockEngineClient(_BE_URL)
 
 
-# ───────────────────────── public API ───────────────────────────────────────
+# ───────────────────────── public API (bundle sending) ─────────────────────
 async def _post_bundle(
     txs: Iterable[VersionedTransaction], tip: int = _TIP_LAMPORTS
 ) -> str:
@@ -86,3 +95,7 @@ def get_solana_client(*_, **__):
             return {"solana-core": "TEST"}
 
     return _Dummy()
+
+
+# ensure re-export
+__all__ = [*globals().get("__all__", []), "get_wallet_balance_usd"]

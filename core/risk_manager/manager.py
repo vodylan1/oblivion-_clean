@@ -1,60 +1,46 @@
-"""
-Risk-Manager · Phase 11 stub
-Singleton + helpers for tests and live loop.
-"""
+"""Central risk-sizing + guardrails façade."""
 
 from __future__ import annotations
 
-from decimal import Decimal
-from typing import Optional
+from dataclasses import dataclass
+from importlib import import_module
+from typing import Final
 
-# --- delegate to the PR-queue RiskManager pipeline --------------------------
-try:
-    # local pipeline stub in tests / full impl in prod
-    from pipelines.risk_manager import position_limit_usd as _pl_limit
-except ModuleNotFoundError:  # fallback → current in-core impl
-    _pl_limit = None
+from config.parameters import VAR_CAP_RATIO
+from risk_policies import load_policy
+from security.secure_wallet import get_wallet_balance_usd
+from trade_types import TradeSignal  # ← whatever your project calls this
 
-from config.parameters import VAR_CAP_RATIO, BUY_LOW_CONF
-from pipelines.secure_wallet import get_wallet_balance_usd
-from pipelines.position_manager import get_open_positions_usd
+# ---------------------------------------------------------------------------
 
 
-# ────────────────────────────────────────────────────────────────────────────
-def position_limit_usd() -> Decimal:
-    """
-    Return how much USD we may safely deploy on the *next* buy.
-    Delegates to pipelines.risk_manager when present.
-    """
-    if _pl_limit is not None:          # new delegate
-        return _pl_limit()
-    # ── legacy logic (kept for safety) ──────────────────────────────────────
-    balance  = get_wallet_balance_usd()
-    cap      = balance * Decimal(VAR_CAP_RATIO)
-    if BUY_LOW_CONF:
-        cap /= 2
-    open_pos = get_open_positions_usd()
-    return max(Decimal("0"), cap - open_pos)
+@dataclass(slots=True)
+class _RuntimeCaps:
+    bucket_cap: float = 0.0  # USD limit per token bucket
 
-
-# ────────────────────────────────────────────────────────────────────────────
-class _TierInt(int):
-    """Behaves like int and like a callable returning that int."""
-
-    def __call__(self) -> int:  # noqa: D401
-        return int(self)
+    def refresh(self) -> None:
+        """Recompute caps from live wallet balance + policy."""
+        bal_usd = get_wallet_balance_usd()
+        policy = load_policy()  # default static_25 unless overridden
+        self.bucket_cap = policy.position_limit_usd(bal_usd)
 
 
 class RiskManager:
-    _INSTANCE: Optional["RiskManager"] = None
+    """Singleton providing risk checks & position sizing."""
 
-    # -------------------------------------------------------------- singleton
-    def __new__(cls, *a, **kw):
-        if cls._INSTANCE is not None:
-            raise RuntimeError("RiskManager is a singleton; use .instance()")
-        inst = super().__new__(cls)
-        cls._INSTANCE = inst
-        return inst
+    _INSTANCE: "RiskManager | None" = None
+    _caps: _RuntimeCaps
+
+    # tuneable var-margin cap (global)
+    _var_cap_ratio: Final[float] = VAR_CAP_RATIO
+
+    # --------------------------------------------------------------------- #
+    #  life-cycle helpers
+    # --------------------------------------------------------------------- #
+
+    def __init__(self) -> None:
+        self._caps = _RuntimeCaps()
+        self._caps.refresh()
 
     @classmethod
     def instance(cls) -> "RiskManager":
@@ -62,6 +48,26 @@ class RiskManager:
             cls._INSTANCE = cls()
         return cls._INSTANCE
 
-    # ------------------------------------------------------------------ init
-    def __init__(self) -> None:
-        self._bucket_cap: int = 5_000_000_000  # 5 SOL
+    # --------------------------------------------------------------------- #
+    #  public API
+    # --------------------------------------------------------------------- #
+
+    @property
+    def bucket_cap(self) -> float:
+        """USD cap per token bucket."""
+        return self._caps.bucket_cap
+
+    # ------------------------------------------------------------------ #
+
+    def pre_trade(self, signal: TradeSignal, notional_usd: float) -> bool:
+        """
+        True if the proposed `notional_usd` passes risk checks.
+
+        Current checks:
+        • bucket-cap (per-token)
+        • VAR-cap (global equity %)  — stubbed for now
+        """
+        if notional_usd > self.bucket_cap:
+            return False
+        # TODO: plug in VAR check once equity curves wired-up
+        return True
