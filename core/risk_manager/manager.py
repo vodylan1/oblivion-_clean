@@ -13,7 +13,7 @@ from typing import Final
 from config.parameters import VAR_CAP_RATIO
 from risk_policies import load_policy
 from security.secure_wallet import get_wallet_balance_usd
-from trade_types import (            # ← restored path
+from trade_types import (  # ← restored path
     TradeSide,
     TradeSignal,
     TradeResult,
