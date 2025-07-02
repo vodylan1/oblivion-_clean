@@ -2,9 +2,10 @@
 
 CI stubs keep the unit tests green; production logic is TODO.
 """
-
 from __future__ import annotations
-import base64, os
+
+import base64
+import os
 from typing import Final
 
 
@@ -30,7 +31,7 @@ _RPC: Final[str] = os.getenv("RPC_ENDPOINT", "https://api.devnet.solana.com")
 def get_wallet_balance_usd() -> float:
     """Return wallet balance in USD.
 
-    * CI  → hard-coded 10 k for deterministic tests.
+    * CI  → hard-coded 10 000 for deterministic tests.
     * Prod→ TODO: RPC balance × price feed.
     """
     if os.getenv("CI"):
@@ -56,7 +57,7 @@ def get_solana_client(cluster: str = "mainnet") -> str:  # str stub
     return _RPC
 
 
-# ── legacy aliases expected by strategies.ping.strategy ───
+# ── legacy aliases expected by strategies.* ───────────────────────────────
 try:
     # In CI we just expose a dummy signer to keep import-guard happy
     SIGNER: Final[Keypair] = Keypair(b"\0" * 64)
