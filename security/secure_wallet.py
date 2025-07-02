@@ -4,6 +4,7 @@ In production this module will talk to a signer/key-vault and a real Solana RPC
 endpoint.  For the test-suite we supply deterministic stand-ins so imports
 resolve without network access or private keys.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from typing import Final
 # ─────────────────────────────────────────────────────────────────────────────
 SIGNER_PUBKEY: Final[str] = "So11111111111111111111111111111111111111112"
 _FAKE_SIG: Final[str] = "0xDEADBEEF"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public helpers expected by pipelines / strategies
@@ -51,6 +53,7 @@ class Keypair:
 
 # Alias used by various modules to reference the hot signer key.
 SIGNER: Keypair = Keypair()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Optional stub RPC client – satisfies `rug_checker` tests without network

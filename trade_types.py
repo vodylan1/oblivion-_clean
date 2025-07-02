@@ -3,6 +3,7 @@
 Placed at repo root so any package can simply `import trade_types` without
 circular-import risk.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,8 +20,8 @@ class TradeSide(str, Enum):
 class TradeSignal:
     """A strategy’s desired action before execution."""
 
-    action: TradeSide            # BUY or SELL
-    confidence: float            # 0-1 probability of edge
+    action: TradeSide  # BUY or SELL
+    confidence: float  # 0-1 probability of edge
     meta: Dict[str, Any] = None  # arbitrary strategy hints
 
 
@@ -28,6 +29,6 @@ class TradeSignal:
 class TradeResult:
     """What actually happened on-chain (post-trade)."""
 
-    ok: bool                       # was TX successful?
-    usd_size: float                # notional size
-    tx_hash: str | None = None     # blockchain TX ID
+    ok: bool  # was TX successful?
+    usd_size: float  # notional size
+    tx_hash: str | None = None  # blockchain TX ID

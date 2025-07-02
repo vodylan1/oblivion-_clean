@@ -4,6 +4,7 @@ Central risk-sizing façade (“RiskManager”).
 Phase-3 goal: expose a single `.pre_trade()` gate and live-refresh
 `bucket_cap` sourced from `risk_policies.*`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from trade_types import (  # ← top-level path per spec
     TradeSignal,
     TradeResult,
 )
+
 
 # ──────────────────────────────────────────────────────────────
 # helpers
@@ -81,6 +83,7 @@ class RiskManager:
 # pipeline compatibility shim (used by tests & legacy code)
 # ──────────────────────────────────────────────────────────────
 from pipelines.risk_manager import position_limit_usd as _pipeline_limit  # noqa: E402
+
 
 def position_limit_usd() -> Decimal:  # noqa: D401
     """Backward-compat façade that delegates to the pipeline helper."""

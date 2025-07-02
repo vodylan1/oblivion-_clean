@@ -1,11 +1,16 @@
 """
-core.risk_manager – package façade
-==================================
-
-Exports:
-    • RiskManager (Phase‑9‑A, already implemented in manager.py)
-    • AutoTuner / Sentinel utilities are imported *inside* RiskManager when
-      required, but we re‑export nothing else here to keep surface tight.
+Registry helper for dynamic import of risk-policy modules.
 """
 
-from .manager import RiskManager  # noqa: F401  (re‑export for external imports)
+from importlib import import_module
+
+__all__: list[str] = ["load_policy"]
+
+
+def load_policy(name: str = "static_25"):
+    """
+    Return the module implementing the named risk-policy.
+
+    Defaults to ``risk_policies.static_25``.
+    """
+    return import_module(f"risk_policies.{name}")
