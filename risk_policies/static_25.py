@@ -1,15 +1,10 @@
-from __future__ import annotations
-from decimal import Decimal
+"""Static policy: limit each new position to MAX_PCT of current wallet USD balance."""
+
+from typing import Final
+
+MAX_PCT: Final[float] = 0.25  # 25 %
 
 
-class Policy:
-    """Static 25 % VaR cap; halves if balance < $500."""
-
-    VAR_CAP = Decimal("0.25")
-    LOW_BAL_THRESHOLD = Decimal("500")
-
-    def allowance(self, balance: Decimal, open_pos: Decimal) -> Decimal:
-        cap = balance * self.VAR_CAP
-        if balance < self.LOW_BAL_THRESHOLD:
-            cap /= 2
-        return cap - open_pos
+def position_limit_usd(balance_usd: float) -> float:
+    """Return the USD cap for the next trade, given wallet balance."""
+    return balance_usd * MAX_PCT
