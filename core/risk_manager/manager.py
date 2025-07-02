@@ -1,8 +1,8 @@
 """
 Central risk-sizing façade (“RiskManager”).
 
-Phase‑3 goal: expose a single `.pre_trade()` gate and
-live‑refresh bucket‑cap sourced from `risk_policies.*`.
+Phase-3 goal: expose a single `.pre_trade()` gate and live-refresh
+`bucket_cap` sourced from `risk_policies.*`.
 """
 from __future__ import annotations
 
@@ -13,41 +13,32 @@ from typing import Final
 from config.parameters import VAR_CAP_RATIO
 from risk_policies import load_policy
 from security.secure_wallet import get_wallet_balance_usd
-from trade_types import (
+from trade_types import (  # ← top-level path per spec
     TradeSide,
     TradeSignal,
     TradeResult,
 )
 
-# Import the pipeline helper so we can delegate the position‑sizing logic that
-# lives in `pipelines.risk_manager`.  This avoids code duplication and keeps the
-# legacy tests pointing at the original module path.
-from pipelines.risk_manager import position_limit_usd as _pipeline_limit  # noqa: E402
-
 # ──────────────────────────────────────────────────────────────
 # helpers
 # ──────────────────────────────────────────────────────────────
-
-
 @dataclass(slots=True)
 class _RuntimeCaps:
-    """Holds live‑computed USD limits."""
+    """Holds live-computed USD limits (refreshed each instantiation)."""
 
     bucket_cap: float = 0.0
 
-    def refresh(self) -> None:  # noqa: D401
+    def refresh(self) -> None:
         bal = get_wallet_balance_usd()
-        policy = load_policy()  # defaults to static_25
+        policy = load_policy()  # defaults to risk_policies.static_25
         self.bucket_cap = policy.position_limit_usd(bal)
 
 
 # ──────────────────────────────────────────────────────────────
 # singleton
 # ──────────────────────────────────────────────────────────────
-
-
 class RiskManager:
-    """Singleton orchestrating all pre‑trade risk checks."""
+    """Singleton orchestrating all pre-trade risk checks."""
 
     _INSTANCE: "RiskManager | None" = None
 
@@ -59,7 +50,6 @@ class RiskManager:
         self._caps.refresh()
 
     # ---------- factory ---------- #
-
     @classmethod
     def instance(cls) -> "RiskManager":
         if cls._INSTANCE is None:
@@ -67,20 +57,18 @@ class RiskManager:
         return cls._INSTANCE
 
     # ---------- live data ---------- #
-
     @property
     def bucket_cap(self) -> float:  # noqa: D401
         """USD limit per token bucket."""
         return self._caps.bucket_cap
 
     # ---------- public check ---------- #
-
     def pre_trade(self, signal: TradeSignal, notional_usd: float) -> bool:
         """
         Return **True** if the proposed trade passes risk rules.
 
         Currently enforced:
-        • bucket‑cap
+        • bucket-cap
         • (stub) global VAR cap
         """
         if notional_usd > self.bucket_cap:
@@ -90,11 +78,10 @@ class RiskManager:
 
 
 # ──────────────────────────────────────────────────────────────
-# backward‑compat façade (used by unit‑tests)  ──────────────────
+# pipeline compatibility shim (used by tests & legacy code)
 # ──────────────────────────────────────────────────────────────
-
+from pipelines.risk_manager import position_limit_usd as _pipeline_limit  # noqa: E402
 
 def position_limit_usd() -> Decimal:  # noqa: D401
-    """Pipeline façade kept here for backward‑compat tests."""
-
+    """Backward-compat façade that delegates to the pipeline helper."""
     return _pipeline_limit()
