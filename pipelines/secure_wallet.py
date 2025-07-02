@@ -57,7 +57,11 @@ def get_solana_client(cluster: str = "mainnet") -> str:  # str stub
     return _RPC
 
 
+<<<<<<< HEAD
 # ── legacy aliases expected by strategies.* ───────────────────────────────
+=======
+# ── legacy aliases expected by strategies.ping.strategy ───
+>>>>>>> d568d227 (fix: provide SIGNER & send_bundle aliases in secure-wallet façade)
 try:
     # In CI we just expose a dummy signer to keep import-guard happy
     SIGNER: Final[Keypair] = Keypair(b"\0" * 64)
