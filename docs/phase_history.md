@@ -51,3 +51,5 @@
 - `execution_engine` routes **SHORT / CLOSE_SHORT** (mock only).  
 - `position_manager` stores in-memory positions.  
 - Synergy randomly triggers SHORT to verify plumbing.
+
+2025?07?19 – Phase?09 scaffold merged (Birdeye fail?over, smoothing, metrics, +6?tests)
