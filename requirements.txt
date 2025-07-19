@@ -1,27 +1,16 @@
-# ── core runtime ─────────────────────────────────────────
 requests==2.32.2
 base58==2.1.1
 aiohttp==3.9.5
 pandas==2.2.2
 pyarrow==15.0.2
-
-# ── Solana stack ─────────────────────────────────────────
-solana==0.34.2          # ≥0.33 relaxes the httpx<0.24 pin
-# solders (v0.10.x) will be installed automatically
-
-# ── numeric / ML ─────────────────────────────────────────
+solana==0.34.2
 numpy==1.26.4
 torch==2.2.2+cpu
---extra-index-url https://download.pytorch.org/whl/cpu
-
-# ── util ────────────────────────────────────────────────
 PyYAML==6.0.2
 backoff==2.2.1
-
-# Bundle posting helper
-jito-py-rpc==0.1.5      # latest as of 2025‑06‑21
+jito-py-rpc==0.1.5
 aiosqlite==0.20.0
 httpx==0.27.0
-pydantic==2.7.4         # jito‑py‑rpc & solana need v2
+pydantic==2.7.4
 prometheus-client==0.20.0
 sentry-sdk==1.44.0
