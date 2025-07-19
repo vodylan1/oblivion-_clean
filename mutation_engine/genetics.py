@@ -1,5 +1,5 @@
 """Phase‑10: NEAT + Optuna scaffolds (no heavy compute yet)."""
-import neat, optuna
+import optuna
 from mutation_engine.models import Genome, Gene, StrategyScore
 
 def crossover(parent_a: Genome, parent_b: Genome) -> Genome:
