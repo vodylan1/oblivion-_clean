@@ -22,3 +22,6 @@ backoff==2.2.1
 
 # Bundle posting helper
 jito-py-rpc==0.1.5   # latest as of 2025‑06‑21
+neat-python==0.99
+optuna==3.6.1
+timescale-client==0.3.0
