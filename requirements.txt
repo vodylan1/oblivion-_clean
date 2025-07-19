@@ -6,8 +6,8 @@ pandas==2.2.2
 pyarrow==15.0.2
 
 # ── Solana stack ─────────────────────────────────────────
-solana==0.28.0          # last release that still ships solana.keypair.Keypair
-# solders (v0.10.x) will be installed automatically to satisfy solana 0.28
+solana==0.34.2          # ≥0.33 relaxes the httpx<0.24 pin
+# solders (v0.10.x) will be installed automatically
 
 # ── numeric / ML ─────────────────────────────────────────
 numpy==1.26.4
