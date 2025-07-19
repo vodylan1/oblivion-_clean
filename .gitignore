@@ -19,3 +19,4 @@ config/secrets.json
 .venv/
 .venv/
 price_queue.db
+price_queue.db
