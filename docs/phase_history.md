@@ -53,3 +53,5 @@
 - Synergy randomly triggers SHORT to verify plumbing.
 
 2025?07?19 – Phase?09 scaffold merged (Birdeye fail?over, smoothing, metrics, +6?tests)
+
+* **2025?07?19** — Phase?10 scaffold merged (mutation engine shell, Jupiter route scorer, +6 tests)
