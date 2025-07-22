@@ -14,10 +14,10 @@ xmlns="http://www.w3.org/TR/REC-html40">
  <o:DocumentProperties>
   <o:Author>C B</o:Author>
   <o:LastAuthor>C B</o:LastAuthor>
-  <o:Revision>3</o:Revision>
+  <o:Revision>5</o:Revision>
   <o:TotalTime>1</o:TotalTime>
   <o:Created>2025-07-22T12:33:00Z</o:Created>
-  <o:LastSaved>2025-07-22T12:34:00Z</o:LastSaved>
+  <o:LastSaved>2025-07-22T13:28:00Z</o:LastSaved>
   <o:Pages>1</o:Pages>
   <o:Words>400</o:Words>
   <o:Characters>2285</o:Characters>
@@ -35,8 +35,6 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <!--[if gte mso 9]><xml>
  <w:WordDocument>
   <w:View>Print</w:View>
-  <w:SpellingState>Clean</w:SpellingState>
-  <w:GrammarState>Clean</w:GrammarState>
   <w:TrackMoves>false</w:TrackMoves>
   <w:TrackFormatting/>
   <w:ValidateAgainstSchemas/>
@@ -51,6 +49,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
    <w:BreakWrappedTables/>
    <w:SplitPgBreakAndParaMark/>
   </w:Compatibility>
+  <w:BrowserLevel>MicrosoftInternetExplorer4</w:BrowserLevel>
   <m:mathPr>
    <m:mathFont m:val="Cambria Math"/>
    <m:brkBin m:val="before"/>
@@ -677,12 +676,6 @@ p.msonormal0, li.msonormal0, div.msonormal0
 	font-family:"Times New Roman",serif;
 	mso-fareast-font-family:"Times New Roman";
 	mso-fareast-theme-font:minor-fareast;}
-span.SpellE
-	{mso-style-name:"";
-	mso-spl-e:yes;}
-span.GramE
-	{mso-style-name:"";
-	mso-gram-e:yes;}
 .MsoChpDefault
 	{mso-style-type:export-only;
 	mso-default-props:yes;
@@ -765,13 +758,11 @@ logic, and basic execution flows.<o:p></o:p></span></p>
 Phase 3<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Introduced a minimal <span class=SpellE>ReflectionEngine</span> that logs trade
-outcomes to reflection_logs.md.<o:p></o:p></span></p>
+Introduced a minimal ReflectionEngine that logs trade outcomes to
+reflection_logs.md.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Added a simple <span class=SpellE>PatchCore</span> module with a dummy `<span
-class=SpellE>request_<span class=GramE>autopatch</span></span><span
-class=GramE>(</span>)` function.<o:p></o:p></span></p>
+Added a simple PatchCore module with a dummy `request_autopatch()` function.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
 Implemented EGO_CORE with a basic emotional overlay that can alter synergy
@@ -805,12 +796,12 @@ Modified synergy logic to consider both agent signals and the SCORING_ENGINE
 score.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Introduced a minimal KILL_SWITCH system that checks recent <span class=SpellE>PnL</span>
-in `<span class=SpellE>reflection_engine</span>` <span class=SpellE>trade_history</span>.<o:p></o:p></span></p>
+Introduced a minimal KILL_SWITCH system that checks recent PnL in
+`reflection_engine` trade_history.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>- If
-total <span class=SpellE>PnL</span> in the last 5
-trades&nbsp;&lt;&nbsp;&#8209;50, the kill switch triggers a system freeze.<o:p></o:p></span></p>
+total PnL in the last 5 trades&nbsp;&lt;&nbsp;&#8209;50, the kill switch
+triggers a system freeze.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
@@ -819,16 +810,15 @@ Phase 5<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
 Introduced concurrency via a background thread that scans for whale activity
-(**<span class=SpellE>GodAwareness</span>**).<o:p></o:p></span></p>
+(**GodAwareness**).<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>- If
 suspicious activity is detected, synergy can shift to a fear emotional state in
 EGO_CORE.<o:p></o:p></span></p>
 
-<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>- `<span
-class=SpellE>synergy_conductor_run</span>` continues to incorporate
-SCORING_ENGINE + agent logic, but now can be influenced by real&#8209;time
-whale alerts.<o:p></o:p></span></p>
+<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
+`synergy_conductor_run` continues to incorporate SCORING_ENGINE + agent logic,
+but now can be influenced by real&#8209;time whale alerts.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
 The system can now handle multiple loops (or eventually multiple concurrent
@@ -837,11 +827,10 @@ strategies) without blocking the on&#8209;chain scanning.<o:p></o:p></span></p>
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>###
-Phase&#8239;<span class=GramE>6&nbsp;&nbsp;(</span>2025&#8209;06&#8209;02)<o:p></o:p></span></p>
+Phase&#8239;6&nbsp;&nbsp;(2025&#8209;06&#8209;02)<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Migrated to **<span class=SpellE>solana&#8209;py</span>&nbsp;0.36.x** / **<span
-class=SpellE><span class=GramE>solders.keypair</span></span>**.<span
+Migrated to **solana&#8209;py&nbsp;0.36.x** / **solders.keypair**.<span
 style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
@@ -849,39 +838,38 @@ style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 airdrop.<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-End&#8209;to&#8209;end loop confirmed on local <span class=SpellE>venv</span>.<o:p></o:p></span></p>
+End&#8209;to&#8209;end loop confirmed on local venv.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>###
-Phase&#8239;7&#8209;<span class=GramE>0&nbsp;&nbsp;(</span>2025&#8209;06&#8209;04)<o:p></o:p></span></p>
+Phase&#8239;7&#8209;0&nbsp;&nbsp;(2025&#8209;06&#8209;04)<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
 **Scaffolds** created:<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><span
-style='mso-spacerun:yes'>  </span>`core/<span class=SpellE>derivatives_engine</span>/`
-and `pipelines/position_manager.py`.<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
+style='mso-spacerun:yes'>  </span>`core/derivatives_engine/` and
+`pipelines/position_manager.py`.<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Both print placeholder <span class=SpellE>init</span> lines.<o:p></o:p></span></p>
+Both print placeholder init lines.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>###
-Phase&#8239;7&#8209;<span class=GramE>1&nbsp;&nbsp;(</span>2025&#8209;06&#8209;05)<o:p></o:p></span></p>
+Phase&#8239;7&#8209;1&nbsp;&nbsp;(2025&#8209;06&#8209;05)<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
-Stub methods `<span class=SpellE>open_<span class=GramE>short</span></span><span
-class=GramE>(</span>)` / `<span class=SpellE>close_<span class=GramE>short</span></span><span
-class=GramE>(</span>)` added.<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
+Stub methods `open_short()` / `close_short()` added.<span
+style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
-<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>- `<span
-class=SpellE>execution_engine</span>` routes **SHORT / CLOSE_SHORT** (mock
-only).<span style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
+<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
+`execution_engine` routes **SHORT / CLOSE_SHORT** (mock only).<span
+style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
-<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>- `<span
-class=SpellE>position_manager</span>` stores in&#8209;memory positions.<span
+<p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
+`position_manager` stores in&#8209;memory positions.<span
 style='mso-spacerun:yes'>  </span><o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>-
@@ -890,12 +878,12 @@ Synergy randomly triggers SHORT to verify plumbing.<o:p></o:p></span></p>
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>*
-**2025&#8209;07&#8209;19** — Phase&#8239;08 — <span class=SpellE>price_consumer</span>
-scaffold merged (async ring&#8209;buffer reader, +6 tests)<o:p></o:p></span></p>
+**2025&#8209;07&#8209;19** — Phase&#8239;08 — price_consumer scaffold merged
+(async ring&#8209;buffer reader, +6 tests)<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>*
-**2025&#8209;07&#8209;19** — Phase&#8239;09 scaffold merged (<span
-class=SpellE>Birdeye</span> fail&#8209;over, smoothing, metrics, +6 tests)<o:p></o:p></span></p>
+**2025&#8209;07&#8209;19** — Phase&#8239;09 scaffold merged (Birdeye
+fail&#8209;over, smoothing, metrics, +6 tests)<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-fareast-font-family:"Times New Roman"'>*
 **2025&#8209;07&#8209;19** — Phase&#8239;10 scaffold merged (mutation engine
@@ -906,3 +894,13 @@ shell, Jupiter route scorer, +6 tests)</span></p>
 </body>
 
 </html>
+=======
+<<<<<<< HEAD
+2025?07?19&nbsp;– Phase?09 scaffold merged (Birdeye fail?over, smoothing, metrics, +6?tests)
+=======
+* **2025?07?19** — Phase?08 — price_consumer scaffold merged (async ring?buffer reader, 6 tests)
+
+* **2025?07?19** — Phase?08 — price_consumer scaffold merged (async ring?buffer reader, +6 tests)
+>>>>>>> 902bb6dceb22cf17e7c72505f27369a139ee37fb
+2025â€‘07â€‘19 â€“ Phaseâ€¯10 scaffold merged (mutation engine shell, Jupiter route scorer, +6 tests)
+>>>>>>> origin/main
